@@ -620,6 +620,106 @@
     </div>
   </div>
 
+  <p>Here's what a real production-grade agent config looks like — the kind you'd run on every host, co-located with your application:</p>
+
+  <div class="diagram-wrap fade-in" style="margin: 32px -24px;">
+    <div class="diagram-label">config.yaml — production agent config (otelcol-contrib)</div>
+    <pre style="margin:0; border:none; border-radius:0; background:transparent; padding: 20px 24px; font-size: 12.5px; line-height: 1.85; overflow-x: auto;"><span style="color:#6b7a8d;"># ── RECEIVERS ────────────────────────────────────────────────────────</span>
+<span style="color:#818cf8;">receivers:</span>
+
+  <span style="color:#818cf8;">otlp:</span>                          <span style="color:#6b7a8d;"># accept telemetry from your app via SDK</span>
+    <span style="color:#818cf8;">protocols:</span>
+      <span style="color:#818cf8;">grpc:</span>
+        <span style="color:#818cf8;">endpoint:</span> <span style="color:#a5f3c0;">0.0.0.0:4317</span>
+      <span style="color:#818cf8;">http:</span>
+        <span style="color:#818cf8;">endpoint:</span> <span style="color:#a5f3c0;">0.0.0.0:4318</span>
+
+  <span style="color:#818cf8;">hostmetrics:</span>                   <span style="color:#6b7a8d;"># scrape CPU, memory, disk, network from the host</span>
+    <span style="color:#818cf8;">collection_interval:</span> <span style="color:#a5f3c0;">30s</span>
+    <span style="color:#818cf8;">scrapers:</span>
+      <span style="color:#818cf8;">cpu:</span>
+      <span style="color:#818cf8;">memory:</span>
+      <span style="color:#818cf8;">disk:</span>
+      <span style="color:#818cf8;">network:</span>
+      <span style="color:#818cf8;">load:</span>
+
+<span style="color:#6b7a8d;"># ── PROCESSORS ───────────────────────────────────────────────────────</span>
+<span style="color:#818cf8;">processors:</span>
+
+  <span style="color:#818cf8;">memory_limiter:</span>                <span style="color:#6b7a8d;"># safety valve — always first in every pipeline</span>
+    <span style="color:#818cf8;">check_interval:</span> <span style="color:#a5f3c0;">1s</span>
+    <span style="color:#818cf8;">limit_mib:</span>      <span style="color:#a5f3c0;">400</span>
+    <span style="color:#818cf8;">spike_limit_mib:</span> <span style="color:#a5f3c0;">100</span>
+
+  <span style="color:#818cf8;">resourcedetection:</span>             <span style="color:#6b7a8d;"># auto-detect host, OS, cloud metadata</span>
+    <span style="color:#818cf8;">detectors:</span> <span style="color:#a5f3c0;">[env, system, docker]</span>
+    <span style="color:#818cf8;">override:</span>   <span style="color:#a5f3c0;">false</span>
+
+  <span style="color:#818cf8;">resource:</span>                      <span style="color:#6b7a8d;"># add static deployment metadata</span>
+    <span style="color:#818cf8;">attributes:</span>
+      - <span style="color:#818cf8;">key:</span>    <span style="color:#a5f3c0;">deployment.environment</span>
+        <span style="color:#818cf8;">value:</span>  <span style="color:#fde68a;">"production"</span>
+        <span style="color:#818cf8;">action:</span> <span style="color:#a5f3c0;">insert</span>
+      - <span style="color:#818cf8;">key:</span>    <span style="color:#a5f3c0;">team.name</span>
+        <span style="color:#818cf8;">value:</span>  <span style="color:#fde68a;">"platform-eng"</span>
+        <span style="color:#818cf8;">action:</span> <span style="color:#a5f3c0;">insert</span>
+
+  <span style="color:#818cf8;">batch:</span>                         <span style="color:#6b7a8d;"># group records before export — always last before exporter</span>
+    <span style="color:#818cf8;">send_batch_size:</span>    <span style="color:#a5f3c0;">8192</span>
+    <span style="color:#818cf8;">send_batch_max_size:</span> <span style="color:#a5f3c0;">16384</span>
+    <span style="color:#818cf8;">timeout:</span>            <span style="color:#a5f3c0;">200ms</span>
+
+<span style="color:#6b7a8d;"># ── EXPORTERS ────────────────────────────────────────────────────────</span>
+<span style="color:#818cf8;">exporters:</span>
+
+  <span style="color:#818cf8;">otlp:</span>                          <span style="color:#6b7a8d;"># forward to a central gateway collector</span>
+    <span style="color:#818cf8;">endpoint:</span> <span style="color:#a5f3c0;">https://gateway.internal:4317</span>
+    <span style="color:#818cf8;">compression:</span> <span style="color:#a5f3c0;">gzip</span>            <span style="color:#6b7a8d;"># always enable — reduces payload by ~80%</span>
+    <span style="color:#818cf8;">retry_on_failure:</span>
+      <span style="color:#818cf8;">enabled:</span> <span style="color:#a5f3c0;">true</span>
+      <span style="color:#818cf8;">max_elapsed_time:</span> <span style="color:#a5f3c0;">300s</span>
+
+  <span style="color:#818cf8;">debug:</span>                         <span style="color:#6b7a8d;"># stdout output — disable in production, useful in staging</span>
+    <span style="color:#818cf8;">verbosity:</span> <span style="color:#a5f3c0;">basic</span>
+
+<span style="color:#6b7a8d;"># ── EXTENSIONS ───────────────────────────────────────────────────────</span>
+<span style="color:#818cf8;">extensions:</span>
+  <span style="color:#818cf8;">health_check:</span>                  <span style="color:#6b7a8d;"># liveness probe for Kubernetes</span>
+    <span style="color:#818cf8;">endpoint:</span> <span style="color:#a5f3c0;">0.0.0.0:13133</span>
+  <span style="color:#818cf8;">zpages:</span>                        <span style="color:#6b7a8d;"># debug UI at localhost:55679</span>
+
+<span style="color:#6b7a8d;"># ── SERVICE ──────────────────────────────────────────────────────────</span>
+<span style="color:#818cf8;">service:</span>
+  <span style="color:#818cf8;">extensions:</span> <span style="color:#a5f3c0;">[health_check, zpages]</span>
+
+  <span style="color:#818cf8;">pipelines:</span>
+
+    <span style="color:#818cf8;">traces:</span>
+      <span style="color:#818cf8;">receivers:</span>   <span style="color:#a5f3c0;">[otlp]</span>
+      <span style="color:#818cf8;">processors:</span>  <span style="color:#a5f3c0;">[memory_limiter, resourcedetection, resource, batch]</span>
+      <span style="color:#818cf8;">exporters:</span>   <span style="color:#a5f3c0;">[otlp]</span>
+
+    <span style="color:#818cf8;">metrics:</span>
+      <span style="color:#818cf8;">receivers:</span>   <span style="color:#a5f3c0;">[otlp, hostmetrics]</span>
+      <span style="color:#818cf8;">processors:</span>  <span style="color:#a5f3c0;">[memory_limiter, resourcedetection, resource, batch]</span>
+      <span style="color:#818cf8;">exporters:</span>   <span style="color:#a5f3c0;">[otlp]</span>
+
+    <span style="color:#818cf8;">logs:</span>
+      <span style="color:#818cf8;">receivers:</span>   <span style="color:#a5f3c0;">[otlp]</span>
+      <span style="color:#818cf8;">processors:</span>  <span style="color:#a5f3c0;">[memory_limiter, resourcedetection, resource, batch]</span>
+      <span style="color:#818cf8;">exporters:</span>   <span style="color:#a5f3c0;">[otlp]</span>
+
+  <span style="color:#818cf8;">telemetry:</span>                     <span style="color:#6b7a8d;"># collector's own internal metrics — scrape on :8888</span>
+    <span style="color:#818cf8;">metrics:</span>
+      <span style="color:#818cf8;">level:</span>   <span style="color:#a5f3c0;">detailed</span>
+      <span style="color:#818cf8;">address:</span> <span style="color:#a5f3c0;">0.0.0.0:8888</span></pre>
+  </div>
+
+  <div class="opinion fade-in">
+    <div class="label">Key things to notice</div>
+    <p><strong>memory_limiter is always first</strong> in every processor chain — before any other processing. <strong>batch is always last</strong> before the exporter. <strong>resourcedetection + resource</strong> together give you automatic host metadata plus custom deployment attributes on every span. <strong>gzip compression</strong> on the OTLP exporter — never skip this in production. And <strong>service.telemetry</strong> exposes the Collector's own metrics on port 8888 so you can monitor the monitor.</p>
+  </div>
+
   <h2 class="fade-in"><span class="eyebrow">06 — Hard Lessons</span>What We Learned Running This in Production</h2>
 
   <div class="opinion fade-in">
