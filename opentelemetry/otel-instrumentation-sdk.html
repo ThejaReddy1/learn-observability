@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OTel Instrumentation Part 1: SDK, Tracing API and Sampling - LearnObservability</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c10;
+    --surface: #0f1318;
+    --surface2: #151a22;
+    --border: #1e2530;
+    --accent: #00e5a0;
+    --accent2: #ff6b35;
+    --indigo: #818cf8;
+    --text: #d4dce8;
+    --text-muted: #6b7a8d;
+    --text-bright: #f0f4f8;
+    --heading-font: 'Syne', sans-serif;
+    --body-font: 'Lora', serif;
+    --mono-font: 'IBM Plex Mono', monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--body-font);
+    line-height: 1.8;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* NAV DARK */
+  .nav-dark {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 40px; height: 60px;
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0;
+    background: rgba(10,12,16,0.95);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px); z-index: 100;
+  }
+
+  .nav-dark .nav-logo {
+    font-family: var(--heading-font); font-size: 16px; font-weight: 800;
+    color: var(--text-bright); letter-spacing: -0.03em;
+    text-decoration: none; display: flex; align-items: center; gap: 8px;
+  }
+
+  .nav-dark .dot { width: 7px; height: 7px; background: var(--accent); border-radius: 50%; }
+
+  .nav-dark .nav-links { display: flex; align-items: center; gap: 24px; list-style: none; }
+
+  .nav-dark .nav-links a {
+    font-family: var(--heading-font); font-size: 13px; font-weight: 600;
+    color: var(--text-muted); text-decoration: none;
+    letter-spacing: 0.02em; transition: color 0.15s;
+  }
+
+  .nav-dark .nav-links a:hover { color: var(--text-bright); }
+
+  /* HERO */
+  .hero {
+    position: relative; padding: 88px 24px 72px;
+    text-align: center; border-bottom: 1px solid var(--border); overflow: hidden;
+  }
+
+  .hero::before {
+    content: ''; position: absolute; top: -80px; left: 50%;
+    transform: translateX(-50%); width: 700px; height: 400px;
+    background: radial-gradient(ellipse at center, rgba(0,229,160,0.07) 0%, transparent 65%);
+    pointer-events: none;
+  }
+
+  .hero-tags { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 26px; flex-wrap: wrap; }
+
+  .tag { display: inline-block; font-family: var(--mono-font); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; padding: 4px 11px; border-radius: 3px; }
+  .tag-green  { color: var(--accent);  border: 1px solid rgba(0,229,160,0.3);   background: rgba(0,229,160,0.05); }
+  .tag-indigo { color: var(--indigo);  border: 1px solid rgba(129,140,248,0.3); background: rgba(129,140,248,0.05); }
+  .tag-orange { color: var(--accent2); border: 1px solid rgba(255,107,53,0.3);  background: rgba(255,107,53,0.05); }
+  .tag-muted  { color: var(--text-muted); border: 1px solid var(--border); }
+
+  .hero h1 {
+    font-family: var(--heading-font); font-size: clamp(30px, 5vw, 52px);
+    font-weight: 800; color: var(--text-bright); line-height: 1.08;
+    max-width: 820px; margin: 0 auto 20px; letter-spacing: -0.03em;
+  }
+
+  .hero h1 em { color: var(--accent); font-style: normal; }
+  .hero .subtitle { font-family: var(--body-font); font-style: italic; color: var(--text-muted); font-size: 17px; max-width: 560px; margin: 0 auto 28px; line-height: 1.7; }
+  .hero-meta { font-family: var(--mono-font); font-size: 12px; color: var(--text-muted); letter-spacing: 0.05em; }
+
+  /* ARTICLE */
+  article { max-width: 1080px; margin: 0 auto; padding: 72px 24px 100px; }
+
+  h2 {
+    font-family: var(--heading-font); font-size: clamp(20px, 3vw, 27px);
+    font-weight: 700; color: var(--text-bright); margin: 68px 0 16px;
+    letter-spacing: -0.02em; padding-top: 32px; border-top: 1px solid var(--border);
+  }
+
+  h2:first-child { margin-top: 0; }
+
+  h2 .eyebrow {
+    display: block; font-family: var(--mono-font); font-size: 11px; font-weight: 400;
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px;
+  }
+
+  h2 .eyebrow-indigo { color: var(--indigo); }
+  h2 .eyebrow-orange { color: var(--accent2); }
+
+  h3 { font-family: var(--heading-font); font-size: 17px; font-weight: 700; color: var(--text-bright); margin: 40px 0 10px; }
+
+  p { margin-bottom: 20px; color: var(--text); font-size: 17px; }
+  p strong { color: var(--text-bright); font-weight: 600; font-family: var(--heading-font); }
+  p em { font-style: italic; }
+
+  code { font-family: var(--mono-font); font-size: 13px; background: var(--surface2); border: 1px solid var(--border); padding: 1px 7px; border-radius: 4px; color: var(--indigo); }
+
+  a { color: var(--accent); }
+
+  .pullquote { border-left: 3px solid var(--accent); background: rgba(0,229,160,0.04); border-radius: 0 6px 6px 0; padding: 20px 28px; margin: 32px 0; }
+  .pullquote p { font-style: italic; font-size: 19px; color: var(--text-bright); margin: 0; line-height: 1.65; }
+
+  .opinion { border: 1px solid rgba(129,140,248,0.25); background: rgba(129,140,248,0.04); border-radius: 8px; padding: 20px 24px; margin: 32px 0; }
+  .opinion .label { font-family: var(--mono-font); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--indigo); margin-bottom: 8px; }
+  .opinion p { margin: 0; font-size: 16px; color: #c7d2fe; font-style: italic; }
+
+  .info-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 28px; margin: 28px 0; }
+  .info-card .card-label { font-family: var(--mono-font); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; }
+  .info-card h3 { margin: 0 0 8px; font-size: 17px; }
+  .info-card p { margin: 0; font-size: 15px; color: var(--text-muted); }
+
+  .feat-list { display: flex; flex-direction: column; gap: 12px; margin: 20px 0 28px; }
+  .feat-item { display: flex; align-items: flex-start; gap: 14px; padding: 16px 18px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+  .feat-item:hover { border-color: rgba(0,229,160,0.2); }
+  .feat-icon { font-size: 18px; flex-shrink: 0; margin-top: 2px; }
+  .feat-body .label { font-family: var(--heading-font); font-size: 15px; font-weight: 700; color: var(--text-bright); margin-bottom: 3px; }
+  .feat-body .desc { font-size: 14px; color: var(--text-muted); line-height: 1.6; font-family: var(--body-font); }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0 28px; }
+  .grid-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; }
+  .grid-card h4 { font-family: var(--heading-font); font-size: 14px; font-weight: 700; color: var(--text-bright); margin-bottom: 6px; }
+  .grid-card p { font-size: 14px; color: var(--text-muted); margin: 0; line-height: 1.6; font-family: var(--body-font); }
+
+  hr.divider { border: none; border-top: 1px solid var(--border); margin: 0; }
+
+  /* NEXT READS */
+  .next-reads { margin-top: 72px; padding-top: 36px; border-top: 1px solid var(--border); }
+  .next-reads-label { font-family: var(--mono-font); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 16px; }
+  .next-reads-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+
+  .next-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 18px 20px; text-decoration: none; display: block; transition: border-color 0.2s; }
+  .next-card:hover { border-color: rgba(0,229,160,0.25); }
+  .next-card .next-tag { font-family: var(--mono-font); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; }
+  .next-card h4 { font-family: var(--heading-font); font-size: 14px; font-weight: 700; color: var(--text-bright); line-height: 1.3; margin-bottom: 5px; }
+  .next-card p { font-size: 13px; color: var(--text-muted); margin: 0; line-height: 1.5; font-family: var(--body-font); font-style: italic; }
+
+  /* DARK FOOTER */
+  .footer-dark { border-top: 1px solid var(--border); padding: 28px 40px; }
+  .footer-dark .footer-inner { max-width: 760px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; }
+  .footer-dark .footer-logo-dark { font-family: var(--heading-font); font-size: 15px; font-weight: 800; color: var(--text-bright); letter-spacing: -0.03em; text-decoration: none; display: flex; align-items: center; gap: 6px; }
+  .footer-dark .footer-logo-dark .dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; }
+  .footer-dark span { font-family: var(--mono-font); font-size: 12px; color: var(--text-muted); }
+
+  /* SECTION LANDING (dark) */
+  .section-landing { max-width: 1080px; margin: 0 auto; padding: 72px 40px 100px; }
+  .section-label { font-family: var(--mono-font); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; }
+  .section-landing h1 { font-family: var(--heading-font); font-size: clamp(28px, 4vw, 44px); font-weight: 800; color: var(--text-bright); letter-spacing: -0.03em; margin-bottom: 14px; }
+  .section-landing h1 em { color: var(--accent); font-style: normal; }
+  .section-landing > p { font-size: 17px; color: var(--text-muted); font-style: italic; max-width: 580px; line-height: 1.7; margin-bottom: 56px; font-family: var(--body-font); }
+
+  .articles-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; }
+
+  .article-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px; text-decoration: none; display: flex; flex-direction: column; gap: 12px; transition: border-color 0.2s, background 0.2s; }
+  .article-card:hover { border-color: rgba(0,229,160,0.25); background: var(--surface2); }
+  .article-card .card-tag { font-family: var(--mono-font); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 9px; border-radius: 3px; display: inline-block; width: fit-content; }
+  .article-card h2 { font-family: var(--heading-font); font-size: clamp(16px, 2vw, 20px); font-weight: 700; color: var(--text-bright); letter-spacing: -0.02em; line-height: 1.2; border: none; padding: 0; margin: 0; }
+  .article-card p { font-size: 14px; color: var(--text-muted); line-height: 1.65; font-style: italic; font-family: var(--body-font); margin: 0; flex: 1; }
+  .article-card .card-meta { font-family: var(--mono-font); font-size: 12px; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between; }
+  .article-card:hover .arrow { color: var(--accent); }
+
+  /* Coming soon card */
+  .article-card.coming-soon { opacity: 0.45; pointer-events: none; }
+  .coming-pill { font-family: var(--mono-font); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); border: 1px dashed var(--border); border-radius: 3px; padding: 2px 8px; display: inline-block; width: fit-content; }
+
+  @media (max-width: 640px) {
+    .nav-dark { padding: 0 16px; }
+    .nav-dark .nav-links { display: none; }
+    article { padding: 48px 16px 72px; }
+    .two-col { grid-template-columns: 1fr; }
+    .section-landing { padding: 48px 16px 72px; }
+    .footer-dark { padding: 20px 16px; }
+    .footer-dark .footer-inner { flex-direction: column; gap: 8px; text-align: center; }
+  }
+
+  .diagram-wrap {
+    margin: 40px -1px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 16px 16px;
+    overflow: hidden;
+  }
+
+  .diagram-label {
+    font-family: var(--mono-font);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    text-align: center;
+  }
+
+  .diagram-svg {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Scroll fade-in */
+  .fade-in {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+
+  .fade-in.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .fade-in { opacity:0; transform:translateY(20px); transition:opacity 0.6s ease,transform 0.6s ease; }
+  .fade-in.visible { opacity:1; transform:translateY(0); }
+  pre { background:var(--surface2); border:1px solid var(--border); border-radius:8px;
+    padding:20px 24px; font-family:var(--mono-font); font-size:13px; color:#a5f3c0;
+    overflow-x:auto; margin:20px 0 28px; line-height:1.85; }
+  .api-table { width:100%; border-collapse:collapse; margin:20px 0 28px; }
+  .api-table th { font-family:var(--mono-font); font-size:11px; letter-spacing:0.1em;
+    text-transform:uppercase; color:var(--text-muted); padding:10px 14px;
+    border-bottom:1px solid var(--border); text-align:left; background:var(--surface2); }
+  .api-table td { padding:11px 14px; border-bottom:1px solid var(--border);
+    font-size:13px; color:var(--text-muted); vertical-align:top; }
+  .api-table tr:hover td { background:var(--surface); }
+  .api-table td:first-child { font-family:var(--mono-font); font-size:12px; color:var(--accent); white-space:nowrap; }
+  .api-table td:nth-child(3) { font-family:var(--mono-font); font-size:11px; color:var(--indigo); }
+  .sampler-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:20px 0 28px; }
+  .sampler-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:18px; }
+  .sampler-card .s-name { font-family:var(--mono-font); font-size:12px; font-weight:600; color:var(--accent); margin-bottom:4px; }
+  .sampler-card .s-use { font-family:var(--mono-font); font-size:10px; color:var(--text-muted); margin-bottom:8px; letter-spacing:0.05em; text-transform:uppercase; }
+  .sampler-card p { font-size:13px; color:var(--text-muted); margin:0; line-height:1.6; font-family:var(--body-font); }
+  @media (max-width:640px) { .sampler-grid { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<nav class="nav-dark">
+  <a href="../index.html" class="nav-logo"><span class="dot"></span>LearnObservability</a>
+  <ul class="nav-links">
+    <li><a href="../opentelemetry/index.html">OpenTelemetry</a></li>
+    <li><a href="../prometheus/index.html">Prometheus</a></li>
+    <li><a href="../kubernetes/index.html">Kubernetes</a></li>
+    <li><a href="../elastic/index.html">Elastic</a></li>
+  </ul>
+</nav>
+<header class="hero">
+  <div class="hero-tags">
+    <span class="tag tag-green">Instrumentation</span>
+    <span class="tag tag-indigo">SDK</span>
+    <span class="tag tag-muted">15 min read</span>
+  </div>
+  <h1>OTel Instrumentation Part 1:<br><em>SDK, Tracing API and Sampling</em></h1>
+  <p class="subtitle">Instrumentation is the process of adding code or tooling that generates telemetry to observe application behaviour. This guide covers the two approaches, how the SDK and Tracing API work together, span lifecycle from start to end, processors, exporters, and sampling.</p>
+  <div class="hero-meta">Thejasekhar Reddy.G &nbsp;&#183;&nbsp; April 4, 2026</div>
+</header>
+<article>
+
+  <h2 class="fade-in"><span class="eyebrow">01 — Approaches</span>Three Ways to Add Instrumentation</h2>
+  <p>OpenTelemetry gives you three instrumentation approaches, and understanding the difference is the foundation for everything else.</p>
+  <div class="feat-list fade-in">
+    <div class="feat-item"><div class="feat-icon">&#9997;&#65039;</div><div class="feat-body">
+      <div class="label">Manual Instrumentation</div>
+      <div class="desc">You write code using the OTel Tracing API to explicitly create spans, set attributes, record events, and handle exceptions. Full control — gives you the richest data especially for business logic — but requires deliberate effort for every operation you want to trace.</div>
+    </div></div>
+    <div class="feat-item"><div class="feat-icon">&#129302;</div><div class="feat-body">
+      <div class="label">Automatic Instrumentation</div>
+      <div class="desc">Auto instrumentation automatically injects instrumentation to generate telemetry data with no code changes. Uses language-specific techniques like monkey patching to wrap existing functions and capture telemetry seamlessly.</div>
+    </div></div>
+    <div class="feat-item"><div class="feat-icon">&#128230;</div><div class="feat-body">
+      <div class="label">Library-based Instrumentation</div>
+      <div class="desc">Pre-built packages that automatically add tracing and metrics to popular libraries. Zero-touch observability — one line like <code>RequestsInstrumentor().instrument()</code> gives full tracing coverage. Follows standardised data via semantic conventions.</div>
+    </div></div>
+  </div>
+
+  <h2 class="fade-in"><span class="eyebrow">02 — Tracing API Workflow</span>What Happens When You Create a Span</h2>
+  <p>Every span goes through this exact journey per the OTel specification. Understanding the order matters because sampling happens <em>during</em> span creation, not before or after it.</p>
+  
+<div class="diagram-wrap" aria-hidden="true">
+  <div class="diagram-label">Tracing API Workflow — per OTel specification</div>
+  <svg viewBox="0 0 720 130" xmlns="http://www.w3.org/2000/svg" class="diagram-svg">
+    <defs>
+      <filter id="wf1"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      <marker id="wa1" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#1e2530"/></marker>
+    </defs>
+    <rect x="10" y="35" width="80" height="54" rx="7" fill="#0f1318" stroke="#10b981" stroke-width="1.5"/>
+    <text x="50" y="57" fill="#10b981" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Request</text>
+    <text x="50" y="70" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">your code</text>
+    <text x="50" y="102" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">calls API</text>
+    <line x1="90" y1="62" x2="108" y2="62" stroke="#1e2530" stroke-width="1.3" marker-end="url(#wa1)"/>
+    <rect x="108" y="22" width="106" height="80" rx="7" fill="#0f1318" stroke="#10b981" stroke-width="1.8"/>
+    <text x="161" y="46" fill="#10b981" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Tracer</text>
+    <text x="161" y="59" fill="#10b981" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Provider</text>
+    <text x="161" y="73" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">entry point</text>
+    <text x="161" y="84" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">owns: Sampler</text>
+    <text x="161" y="95" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">SpanProcessor</text>
+    <text x="161" y="114" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">get_tracer()</text>
+    <line x1="214" y1="62" x2="232" y2="62" stroke="#1e2530" stroke-width="1.3" marker-end="url(#wa1)"/>
+    <rect x="232" y="22" width="110" height="80" rx="7" fill="#0f1318" stroke="#818cf8" stroke-width="1.5"/>
+    <text x="287" y="46" fill="#818cf8" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Tracer</text>
+    <text x="287" y="59" fill="#818cf8" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">start_span()</text>
+    <text x="287" y="73" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">generates TraceId</text>
+    <text x="287" y="84" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">calls ShouldSample</text>
+    <text x="287" y="95" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">then generates SpanId</text>
+    <text x="287" y="114" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">creates span</text>
+    <line x1="342" y1="62" x2="360" y2="62" stroke="#1e2530" stroke-width="1.3" marker-end="url(#wa1)"/>
+    <rect x="360" y="22" width="100" height="80" rx="7" fill="#0f1318" stroke="#fbbf24" stroke-width="1.5"/>
+    <text x="410" y="46" fill="#fbbf24" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Sampler</text>
+    <text x="410" y="59" fill="#fbbf24" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">ShouldSample</text>
+    <text x="410" y="73" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">keep or drop?</text>
+    <text x="410" y="84" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">sets TraceFlags</text>
+    <text x="410" y="95" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">SpanId independent</text>
+    <text x="410" y="114" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">during span creation</text>
+    <line x1="460" y1="62" x2="478" y2="62" stroke="#1e2530" stroke-width="1.3" marker-end="url(#wa1)"/>
+    <rect x="478" y="22" width="110" height="80" rx="7" fill="#0f1318" stroke="#f97316" stroke-width="1.5"/>
+    <text x="533" y="46" fill="#f97316" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Span</text>
+    <text x="533" y="59" fill="#f97316" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Processor</text>
+    <text x="533" y="73" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">onStart() fired</text>
+    <text x="533" y="84" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">work happens</text>
+    <text x="533" y="95" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">onEnd() at span.end()</text>
+    <text x="533" y="114" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">if span is recording</text>
+    <line x1="588" y1="62" x2="606" y2="62" stroke="#1e2530" stroke-width="1.3" marker-end="url(#wa1)"/>
+    <rect x="606" y="35" width="104" height="54" rx="7" fill="#0f1318" stroke="#0ea5e9" stroke-width="1.5"/>
+    <text x="658" y="57" fill="#0ea5e9" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Span</text>
+    <text x="658" y="70" fill="#0ea5e9" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Exporter</text>
+    <text x="658" y="114" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">OTLP / Console</text>
+    <circle r="5" fill="#10b981" filter="url(#wf1)">
+      <animateMotion dur="3.5s" repeatCount="indefinite" begin="0s" path="M10,62 L710,62"/>
+      <animate attributeName="fill" values="#10b981;#10b981;#818cf8;#fbbf24;#f97316;#0ea5e9" keyTimes="0;0.12;0.28;0.48;0.66;0.86" dur="3.5s" repeatCount="indefinite"/>
+    </circle>
+  </svg>
+</div>
+  <p>The key insight: the Sampler's <code>ShouldSample</code> is called by the Tracer during span creation. If the sampler decides to drop a span, the span becomes a NonRecordingSpan and never reaches the SpanProcessor or SpanExporter. The SpanId is generated independently of the sampling decision — so even dropped spans have a valid ID, useful for logs and exception handling.</p>
+
+  <h2 class="fade-in"><span class="eyebrow">03 — Core Components</span>TracerProvider, Tracer, Span, SpanExporter</h2>
+  
+<div class="diagram-wrap" aria-hidden="true">
+  <div class="diagram-label">SDK Components — TracerProvider owns Sampler, SpanProcessor, SpanLimits</div>
+  <svg viewBox="0 0 620 220" xmlns="http://www.w3.org/2000/svg" class="diagram-svg">
+    <defs>
+      <filter id="sdk1"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      <marker id="sda1" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#1e2530"/></marker>
+    </defs>
+    <rect x="10" y="88" width="90" height="40" rx="7" fill="#0f1318" stroke="#6b7a8d" stroke-width="1.3" stroke-dasharray="5,3"/>
+    <text x="55" y="106" fill="#6b7a8d" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Your Code</text>
+    <text x="55" y="119" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">calls OTel API</text>
+    <line x1="100" y1="108" x2="118" y2="108" stroke="#1e2530" stroke-width="1.3" marker-end="url(#sda1)"/>
+    <rect x="118" y="10" width="290" height="195" rx="10" fill="#0f1318" stroke="#10b981" stroke-width="2"/>
+    <rect x="118" y="10" width="290" height="22" rx="5" fill="#10b981"/>
+    <text x="263" y="26" fill="#000" font-size="10" font-family="IBM Plex Mono" text-anchor="middle" font-weight="700">TracerProvider  (owns all configuration)</text>
+    <rect x="132" y="40" width="78" height="32" rx="5" fill="#0a0c10" stroke="#fbbf24" stroke-width="1.1"/>
+    <text x="171" y="54" fill="#fbbf24" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">Sampler</text>
+    <text x="171" y="65" fill="#6b7a8d" font-size="6.5" font-family="IBM Plex Mono" text-anchor="middle">ShouldSample()</text>
+    <rect x="222" y="40" width="90" height="32" rx="5" fill="#0a0c10" stroke="#f97316" stroke-width="1.1"/>
+    <text x="267" y="54" fill="#f97316" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">SpanProcessor</text>
+    <text x="267" y="65" fill="#6b7a8d" font-size="6.5" font-family="IBM Plex Mono" text-anchor="middle">onStart / onEnd</text>
+    <rect x="324" y="40" width="74" height="32" rx="5" fill="#0a0c10" stroke="#818cf8" stroke-width="1.1"/>
+    <text x="361" y="54" fill="#818cf8" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">SpanLimits</text>
+    <text x="361" y="65" fill="#6b7a8d" font-size="6.5" font-family="IBM Plex Mono" text-anchor="middle">attr / event limits</text>
+    <rect x="162" y="86" width="106" height="40" rx="7" fill="#0a0c10" stroke="#818cf8" stroke-width="1.5"/>
+    <text x="215" y="104" fill="#818cf8" font-size="10" font-family="IBM Plex Mono" text-anchor="middle">Tracer</text>
+    <text x="215" y="117" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">creates Spans</text>
+    <line x1="215" y1="126" x2="215" y2="144" stroke="#1e2530" stroke-width="1.3" marker-end="url(#sda1)"/>
+    <rect x="150" y="144" width="130" height="40" rx="7" fill="#0a0c10" stroke="#fbbf24" stroke-width="1.5"/>
+    <text x="215" y="162" fill="#fbbf24" font-size="10" font-family="IBM Plex Mono" text-anchor="middle">Span</text>
+    <text x="215" y="175" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">single timed operation</text>
+    <line x1="267" y1="72" x2="267" y2="86" stroke="#1e2530" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#sda1)"/>
+    <rect x="444" y="70" width="160" height="80" rx="8" fill="#0f1318" stroke="#0ea5e9" stroke-width="1.8"/>
+    <text x="524" y="98" fill="#0ea5e9" font-size="10" font-family="IBM Plex Mono" text-anchor="middle">SpanExporter</text>
+    <text x="524" y="113" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono" text-anchor="middle">encodes + sends to backend</text>
+    <text x="524" y="126" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">OTLP / Console / Jaeger</text>
+    <text x="524" y="139" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">paired with SpanProcessor</text>
+    <line x1="408" y1="56" x2="444" y2="100" stroke="#1e2530" stroke-width="1.3" marker-end="url(#sda1)"/>
+    <text x="118" y="220" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono">No TracerProvider configured: falls back to No-op. Telemetry generated in memory, never recorded or exported.</text>
+    <circle r="4" fill="#fbbf24" filter="url(#sdk1)">
+      <animateMotion dur="3.2s" repeatCount="indefinite" begin="0s"
+        path="M10,108 L118,108 L215,108 L215,144 L280,164 L408,56 L444,100"/>
+    </circle>
+  </svg>
+</div>
+  <div class="feat-list fade-in">
+    <div class="feat-item"><div class="feat-icon">&#127981;</div><div class="feat-body">
+      <div class="label">TracerProvider — Entry point that owns all configuration</div>
+      <div class="desc">The factory that creates and manages Tracers. Configuration — SpanProcessors, Sampler, SpanLimits — is owned by the TracerProvider. Set up once at startup. Without one configured, OTel falls back to a no-op provider where telemetry is generated in memory but never recorded or exported.</div>
+    </div></div>
+    <div class="feat-item"><div class="feat-icon">&#128225;</div><div class="feat-body">
+      <div class="label">Tracer — Creates Spans, handles in-process context propagation</div>
+      <div class="desc">What you use in your code to create spans. All Spans MUST be created via a Tracer — there is no other API for creating a Span. Get a named Tracer per module using <code>get_tracer(__name__)</code>. The Tracer controls access to the execution context and manages span creation and span lifecycles.</div>
+    </div></div>
+    <div class="feat-item"><div class="feat-icon">&#128230;</div><div class="feat-body">
+      <div class="label">Span — Single timed operation, immutable after end()</div>
+      <div class="desc">The fundamental unit of a trace. <strong>Once a span has completed, it is immutable and can no longer be modified.</strong> Only the first call to <code>end()</code> modifies the span — implementations are free to ignore further calls. Always end spans properly using context managers so they end even when exceptions occur.</div>
+    </div></div>
+    <div class="feat-item"><div class="feat-icon">&#128228;</div><div class="feat-body">
+      <div class="label">SpanExporter — Encodes and sends span data to a telemetry backend</div>
+      <div class="desc">Picks up the spans, encodes them into the format the backend expects, and delivers them. Use <code>OTLPExporter</code> with <code>BatchSpanProcessor</code> in production. Use <code>ConsoleSpanExporter</code> with <code>SimpleSpanProcessor</code> during local development.</div>
+    </div></div>
+  </div>
+
+  <h2 class="fade-in"><span class="eyebrow">03b — In Action</span>SDK Setup and Span Lifecycle in Code</h2>
+  <p>Here is what setting up the SDK and creating your first span looks like in Python. Pay close attention to where the span starts, where work happens, and where <code>span.end()</code> is called — and critically, how error recording works.</p>
+  <div class="diagram-wrap fade-in" style="margin:20px -1px;">
+  <div class="diagram-label">Python — SDK setup, span lifecycle, correct error handling</div>
+  <pre style="margin:0;border:none;border-radius:0;background:transparent;padding:20px 24px;font-size:12.5px;line-height:1.85;overflow-x:auto;"><span style="color:#6b7a8d;"># pip install opentelemetry-sdk opentelemetry-exporter-otlp</span>
+<span style="color:#818cf8;">from</span> opentelemetry <span style="color:#818cf8;">import</span> trace
+<span style="color:#818cf8;">from</span> opentelemetry.sdk.trace <span style="color:#818cf8;">import</span> TracerProvider
+<span style="color:#818cf8;">from</span> opentelemetry.sdk.trace.export <span style="color:#818cf8;">import</span> BatchSpanProcessor
+<span style="color:#818cf8;">from</span> opentelemetry.exporter.otlp.proto.grpc.trace_exporter <span style="color:#818cf8;">import</span> OTLPSpanExporter
+
+<span style="color:#6b7a8d;"># 1. Configure TracerProvider once at startup</span>
+<span style="color:#6b7a8d;">#    TracerProvider owns: Sampler, SpanProcessor, SpanLimits</span>
+provider = TracerProvider()
+provider.add_span_processor(
+    BatchSpanProcessor(OTLPSpanExporter(endpoint=<span style="color:#fde68a;">"http://localhost:4317"</span>))
+)
+trace.set_tracer_provider(provider)
+
+<span style="color:#6b7a8d;"># 2. Get a named Tracer — name identifies your component</span>
+<span style="color:#6b7a8d;">#    All spans MUST be created via a Tracer</span>
+tracer = trace.get_tracer(<span style="color:#fde68a;">"checkout-service"</span>, version=<span style="color:#fde68a;">"1.0.0"</span>)
+
+<span style="color:#6b7a8d;"># 3. start_as_current_span: creates span AND sets it active in context</span>
+<span style="color:#6b7a8d;">#    Context manager calls span.end() automatically when block exits</span>
+<span style="color:#6b7a8d;">#    Even if an exception is raised — span always ends cleanly</span>
+<span style="color:#818cf8;">with</span> tracer.start_as_current_span(<span style="color:#fde68a;">"process-checkout"</span>) <span style="color:#818cf8;">as</span> span:
+    <span style="color:#6b7a8d;"># Prefer setting attributes at creation — available to samplers</span>
+    span.set_attribute(<span style="color:#fde68a;">"user.id"</span>, user_id)
+    span.set_attribute(<span style="color:#fde68a;">"order.id"</span>, order_id)
+
+    <span style="color:#818cf8;">try</span>:
+        result = process_order(order_id)
+        <span style="color:#6b7a8d;"># Set OK explicitly to confirm success</span>
+        span.set_status(trace.StatusCode.OK)
+
+    <span style="color:#818cf8;">except</span> Exception <span style="color:#818cf8;">as</span> e:
+        <span style="color:#6b7a8d;"># record_exception records the exception as a span event</span>
+        span.record_exception(e)
+        <span style="color:#6b7a8d;"># IMPORTANT: record_exception does NOT set status automatically</span>
+        <span style="color:#6b7a8d;"># You MUST call set_status separately</span>
+        span.set_status(trace.StatusCode.ERROR, str(e))
+        <span style="color:#818cf8;">raise</span>
+<span style="color:#6b7a8d;"># span.end() was called by context manager — span is now immutable</span></pre>
+</div>
+  <div class="info-card fade-in">
+    <div class="card-label">Critical: record_exception does NOT set status</div>
+    <h3>You must call set_status(ERROR) separately</h3>
+    <p><code>span.record_exception(e)</code> records the exception as a span event with a timestamp. It does <strong>not</strong> automatically set the span status to ERROR. You must call <code>span.set_status(StatusCode.ERROR, description)</code> separately — otherwise your span appears green in your backend even though it failed.</p>
+  </div>
+  <div class="diagram-wrap fade-in" style="margin:20px -1px;">
+  <div class="diagram-label">No-op fallback — what happens without a TracerProvider</div>
+  <pre style="margin:0;border:none;border-radius:0;background:transparent;padding:20px 24px;font-size:12.5px;line-height:1.85;overflow-x:auto;"><span style="color:#6b7a8d;"># Without set_tracer_provider() — falls back to no-op</span>
+tracer = trace.get_tracer(<span style="color:#fde68a;">"my-service"</span>)
+
+<span style="color:#818cf8;">with</span> tracer.start_as_current_span(<span style="color:#fde68a;">"my-span"</span>) <span style="color:#818cf8;">as</span> span:
+    <span style="color:#6b7a8d;"># span is a NonRecordingSpan</span>
+    <span style="color:#6b7a8d;"># telemetry generated in memory but never exported</span>
+    <span style="color:#6b7a8d;"># your code still works — nothing breaks</span>
+    do_work()
+
+<span style="color:#6b7a8d;"># Intentional for library authors: libraries can use OTel API safely</span>
+<span style="color:#6b7a8d;"># even when the application has not configured any observability</span></pre>
+</div>
+  <div class="diagram-wrap fade-in" style="margin:20px -1px;">
+  <div class="diagram-label">Language neutral — same span lifecycle, different syntax for ending spans</div>
+  <pre style="margin:0;border:none;border-radius:0;background:transparent;padding:20px 24px;font-size:12.5px;line-height:1.85;overflow-x:auto;"><span style="color:#6b7a8d;"># Python — context manager ends span automatically</span>
+<span style="color:#818cf8;">with</span> tracer.start_as_current_span(<span style="color:#fde68a;">"my-span"</span>) <span style="color:#818cf8;">as</span> span:
+    do_work()
+<span style="color:#6b7a8d;"># span.end() called here automatically</span>
+
+<span style="color:#6b7a8d;">// Go — defer guarantees end even on panic</span>
+ctx, span := tracer.Start(ctx, <span style="color:#fde68a;">"my-span"</span>)
+<span style="color:#818cf8;">defer</span> span.End()
+doWork(ctx)
+<span style="color:#6b7a8d;">// span.End() called when function returns</span>
+
+<span style="color:#6b7a8d;">// Java — startActiveSpan handles end via callback return</span>
+tracer.startActiveSpan(<span style="color:#fde68a;">"my-span"</span>, span -> {
+    doWork();
+    span.end();
+    <span style="color:#818cf8;">return</span> null;
+});
+
+<span style="color:#6b7a8d;">// Node.js — must call end() explicitly inside callback</span>
+tracer.startActiveSpan(<span style="color:#fde68a;">"my-span"</span>, (span) => {
+    doWork();
+    span.end(); <span style="color:#6b7a8d;">// must call explicitly</span>
+});</pre>
+</div>
+
+  <h2 class="fade-in"><span class="eyebrow">04 — Tracing API</span>Core API Features Reference</h2>
+  <p>The OTel Tracing API is consistent across all languages. Note the distinction between <code>start_span()</code> and <code>start_as_current_span()</code> — the former does NOT set the span as active in context by default.</p>
+  <table class="api-table fade-in">
+    <thead><tr><th>API / Method</th><th>What it does</th><th>Example</th></tr></thead>
+    <tbody>
+      <tr><td>get_tracer()</td><td>Get a named Tracer for a module or library</td><td>get_tracer(__name__)</td></tr>
+      <tr><td>start_span()</td><td>Start a new span — does NOT set as active in context</td><td>tracer.start_span("op") or with tracer.start_as_current_span("op") </td></tr>
+      <tr><td>start_as_current_span()</td><td>Start span AND set it as active in context (preferred)</td><td>tracer.start_as_current_span("op")</td></tr>
+      <tr><td>end()</td><td>End the span — only first call takes effect, span becomes immutable</td><td>span.end()</td></tr>
+      <tr><td>set_attribute()</td><td>Add a key-value attribute — prefer adding at span creation</td><td>span.set_attribute("key", "val")</td></tr>
+      <tr><td>add_event()</td><td>Add a timestamped event to a span</td><td>span.add_event("event", attributes={...})</td></tr>
+      <tr><td>record_exception()</td><td>Record exception as span event — does NOT set status automatically</td><td>span.record_exception(exc)</td></tr>
+      <tr><td>set_status()</td><td>Mark span OK or ERROR — must call after record_exception for errors</td><td>span.set_status(StatusCode.ERROR)</td></tr>
+      <tr><td>Context APIs</td><td>Get/Set active span in context</td><td>get_current_span(), set_span_in_context()</td></tr>
+      <tr><td>Propagators</td><td>Inject/Extract trace context across process boundaries</td><td>inject(carrier), extract(carrier)</td></tr>
+      <tr><td>Baggage API</td><td>Store/Retrieve cross-cutting key-value pairs in context</td><td>set_baggage("user", "alice", context)</td></tr>
+    </tbody>
+  </table>
+
+  <h2 class="fade-in"><span class="eyebrow">05 — Processors and Exporters</span>How Spans Move From SDK to Backend</h2>
+  <p>The SpanProcessor sits between the TracerProvider and the SpanExporter. It hooks into <code>onStart()</code> when the span begins and <code>onEnd()</code> when <code>span.end()</code> is called. It only runs if the span is recording — dropped spans never reach the processor.</p>
+  
+<div class="diagram-wrap" aria-hidden="true">
+  <div class="diagram-label">SpanProcessor — sits between TracerProvider and SpanExporter</div>
+  <svg viewBox="0 0 620 130" xmlns="http://www.w3.org/2000/svg" class="diagram-svg">
+    <defs>
+      <filter id="pf1"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      <marker id="pa1" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#1e2530"/></marker>
+    </defs>
+    <rect x="10" y="40" width="90" height="50" rx="7" fill="#0f1318" stroke="#10b981" stroke-width="1.5"/>
+    <text x="55" y="60" fill="#10b981" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Span</text>
+    <text x="55" y="73" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">onStart() fired</text>
+    <text x="55" y="84" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">work happens</text>
+    <text x="55" y="100" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">span.end() called</text>
+    <line x1="100" y1="65" x2="118" y2="65" stroke="#1e2530" stroke-width="1.3" marker-end="url(#pa1)"/>
+    <rect x="118" y="18" width="138" height="38" rx="7" fill="#0f1318" stroke="#818cf8" stroke-width="1.3"/>
+    <text x="187" y="34" fill="#818cf8" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">SimpleSpanProcessor</text>
+    <text x="187" y="48" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">passes finished spans immediately</text>
+    <rect x="118" y="72" width="138" height="38" rx="7" fill="#0f1318" stroke="#fbbf24" stroke-width="1.3"/>
+    <text x="187" y="88" fill="#fbbf24" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">BatchSpanProcessor</text>
+    <text x="187" y="102" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">batches finished spans in queue</text>
+    <line x1="256" y1="37" x2="290" y2="60" stroke="#1e2530" stroke-width="1.2" marker-end="url(#pa1)"/>
+    <line x1="256" y1="91" x2="290" y2="70" stroke="#1e2530" stroke-width="1.2" marker-end="url(#pa1)"/>
+    <rect x="290" y="40" width="110" height="50" rx="7" fill="#0f1318" stroke="#f97316" stroke-width="1.5"/>
+    <text x="345" y="60" fill="#f97316" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">SpanExporter</text>
+    <text x="345" y="73" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono" text-anchor="middle">export() shutdown()</text>
+    <text x="345" y="84" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono" text-anchor="middle">forceFlush()</text>
+    <line x1="400" y1="55" x2="432" y2="24" stroke="#1e2530" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#pa1)"/>
+    <line x1="400" y1="65" x2="432" y2="65" stroke="#1e2530" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#pa1)"/>
+    <line x1="400" y1="75" x2="432" y2="106" stroke="#1e2530" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#pa1)"/>
+    <rect x="432" y="10" width="170" height="28" rx="5" fill="#0f1318" stroke="#0ea5e9" stroke-width="1.2"/>
+    <text x="517" y="28" fill="#0ea5e9" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">OTLP to Collector or Backend</text>
+    <rect x="432" y="51" width="170" height="28" rx="5" fill="#0f1318" stroke="#10b981" stroke-width="1.2"/>
+    <text x="517" y="69" fill="#10b981" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Console (dev / debug)</text>
+    <rect x="432" y="92" width="170" height="28" rx="5" fill="#0f1318" stroke="#818cf8" stroke-width="1.2"/>
+    <text x="517" y="110" fill="#818cf8" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Jaeger / Zipkin</text>
+    <circle r="4" fill="#818cf8" filter="url(#pf1)">
+      <animateMotion dur="2.8s" repeatCount="indefinite" begin="0s" path="M10,65 L118,37 L256,37 L290,65 L400,65 L517,65"/>
+    </circle>
+    <circle r="4" fill="#fbbf24" filter="url(#pf1)">
+      <animateMotion dur="2.8s" repeatCount="indefinite" begin="1.4s" path="M10,65 L118,91 L256,91 L290,65 L400,65 L517,65"/>
+    </circle>
+  </svg>
+</div>
+  <div class="two-col fade-in">
+    <div class="grid-card">
+      <h4>SimpleSpanProcessor</h4>
+      <p>Passes each finished span directly to the exporter as soon as <code>span.end()</code> is called. Synchronous — blocks the calling thread. Good for local testing. Not suitable for production.</p>
+    </div>
+    <div class="grid-card">
+      <h4>BatchSpanProcessor</h4>
+      <p>Creates batches of finished spans and passes them to the exporter asynchronously. Non-blocking — the default for production. Default maxQueueSize: 2048. Default scheduledDelay: 5000ms.</p>
+    </div>
+  </div>
+  <p>The SpanExporter has three key behaviours. <code>export()</code> sends a batch of spans to the destination. <code>shutdown()</code> stops exporting and cleans up resources — call before exit to avoid data loss. <code>forceFlush()</code> immediately pushes all pending spans regardless of batching.</p>
+
+  <h2 class="fade-in"><span class="eyebrow">06 — Sampling</span>Deciding Which Spans Get Kept</h2>
+  <p>Sampling is the mechanism that decides which spans are kept and which are dropped. Sampling decisions are propagated across services using TraceFlags. The decision happens during span creation and influences not just the current span — child spans created with ParentBasedSampler will also be dropped if the parent is not sampled.</p>
+  
+<div class="diagram-wrap" aria-hidden="true">
+  <div class="diagram-label">Sampling — ShouldSample called during span creation</div>
+  <svg viewBox="0 0 580 170" xmlns="http://www.w3.org/2000/svg" class="diagram-svg">
+    <defs>
+      <filter id="sf1"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      <marker id="sa1" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#1e2530"/></marker>
+    </defs>
+    <text x="10" y="22" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono">All spans</text>
+    <rect x="10" y="30" width="60" height="16" rx="3" fill="#0f1318" stroke="#10b981" stroke-width="1"/>
+    <rect x="10" y="52" width="60" height="16" rx="3" fill="#0f1318" stroke="#10b981" stroke-width="1"/>
+    <rect x="10" y="74" width="60" height="16" rx="3" fill="#0f1318" stroke="#10b981" stroke-width="1"/>
+    <rect x="10" y="96" width="60" height="16" rx="3" fill="#0f1318" stroke="#10b981" stroke-width="1"/>
+    <rect x="10" y="118" width="60" height="16" rx="3" fill="#0f1318" stroke="#10b981" stroke-width="1"/>
+    <rect x="110" y="48" width="150" height="80" rx="10" fill="#0f1318" stroke="#fbbf24" stroke-width="1.8"/>
+    <text x="185" y="78" fill="#fbbf24" font-size="11" font-family="IBM Plex Mono" text-anchor="middle">Sampler</text>
+    <text x="185" y="95" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">ShouldSample() called</text>
+    <text x="185" y="108" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono" text-anchor="middle">sets TraceFlags in SpanContext</text>
+    <text x="185" y="120" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono" text-anchor="middle">SpanId generated independently</text>
+    <line x1="70" y1="38"  x2="110" y2="78"  stroke="#1e2530" stroke-width="1" marker-end="url(#sa1)"/>
+    <line x1="70" y1="60"  x2="110" y2="85"  stroke="#1e2530" stroke-width="1" marker-end="url(#sa1)"/>
+    <line x1="70" y1="82"  x2="110" y2="90"  stroke="#1e2530" stroke-width="1" marker-end="url(#sa1)"/>
+    <line x1="70" y1="104" x2="110" y2="100" stroke="#1e2530" stroke-width="1" marker-end="url(#sa1)"/>
+    <line x1="70" y1="126" x2="110" y2="110" stroke="#1e2530" stroke-width="1" marker-end="url(#sa1)"/>
+    <line x1="260" y1="72" x2="310" y2="55" stroke="#10b981" stroke-width="1.3" marker-end="url(#sa1)"/>
+    <text x="270" y="53" fill="#10b981" font-size="8" font-family="IBM Plex Mono">SAMPLED</text>
+    <rect x="310" y="34" width="130" height="56" rx="7" fill="#0f1318" stroke="#10b981" stroke-width="1.3"/>
+    <text x="375" y="57" fill="#10b981" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Recorded</text>
+    <text x="375" y="71" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono" text-anchor="middle">SpanProcessor.onStart()</text>
+    <text x="375" y="83" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono" text-anchor="middle">then SpanExporter</text>
+    <line x1="260" y1="110" x2="310" y2="125" stroke="#f97316" stroke-width="1.3" marker-end="url(#sa1)"/>
+    <text x="265" y="130" fill="#f97316" font-size="8" font-family="IBM Plex Mono">DROPPED</text>
+    <rect x="310" y="110" width="160" height="44" rx="7" fill="#0f1318" stroke="#f97316" stroke-width="1.3"/>
+    <text x="385" y="130" fill="#f97316" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">NonRecordingSpan</text>
+    <text x="390" y="145" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">ParentBased: child spans dropped too</text>
+    <text x="452" y="80" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono">SpanId still</text>
+    <text x="452" y="91" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono">generated even</text>
+    <text x="452" y="102" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono">for dropped spans</text>
+    <circle r="4" fill="#fbbf24" filter="url(#sf1)">
+      <animateMotion dur="2.6s" repeatCount="indefinite" begin="0s" path="M10,82 L110,88 L260,72 L310,62"/>
+    </circle>
+    <circle r="4" fill="#fbbf24" filter="url(#sf1)">
+      <animateMotion dur="2.6s" repeatCount="indefinite" begin="1.3s" path="M10,82 L110,88 L260,110 L310,132"/>
+    </circle>
+  </svg>
+</div>
+  <div class="sampler-grid fade-in">
+    <div class="sampler-card">
+      <div class="s-name">AlwaysOnSampler</div>
+      <div class="s-use">Dev - Low volume - Debugging</div>
+      <p>Records all spans. Use in development or low-volume production services where you want full visibility.</p>
+    </div>
+    <div class="sampler-card">
+      <div class="s-name">AlwaysOffSampler</div>
+      <div class="s-use">Disable tracing without removing code</div>
+      <p>Records no spans. Useful when you want to disable tracing without removing instrumentation from your codebase.</p>
+    </div>
+    <div class="sampler-card">
+      <div class="s-name">TraceIdRatioBased</div>
+      <div class="s-use">Production - High volume</div>
+      <p>Records a percentage of spans. Head-based sampling. Good for production workloads at scale — e.g. 20% sampling with OTEL_TRACES_SAMPLER_ARG=0.2.</p>
+    </div>
+    <div class="sampler-card">
+      <div class="s-name">ParentBasedSampler</div>
+      <div class="s-use">Distributed systems consistency</div>
+      <p>Follows the sampling decision of the parent span. Ensures entire traces are either fully sampled or fully dropped — no partial traces in your backend.</p>
+    </div>
+  </div>
+  <div class="note-box fade-in">
+    <div class="note-label">Configure via environment variables for Auto-Instrumentation</div>
+    <p><code>OTEL_TRACES_SAMPLER=parentbased_traceidratio</code> and <code>OTEL_TRACES_SAMPLER_ARG=0.2</code> for 20% sampling. Default is parentbased_always_on.</p>
+  </div>
+
+  <h2 class="fade-in"><span class="eyebrow">07 — Span Attributes</span>Assigning Metadata for Better Visibility</h2>
+  <p>Span attributes are key-value pairs that contain metadata you can use to annotate a span. Prefer adding attributes at span creation — attributes set after creation are not available to SDK samplers.</p>
+  <div class="two-col fade-in">
+    <div class="grid-card">
+      <h4>Semantic Attributes</h4>
+      <p>Predefined standard keys — http.method, db.system, http.status_code. Set automatically by instrumentation libraries. Ensure consistency across services and backends.</p>
+    </div>
+    <div class="grid-card">
+      <h4>Custom Attributes</h4>
+      <p>Your domain context — user.id, order.value, tenant.name. Not automatic. You add them manually. These are what make traces genuinely useful during a real incident.</p>
+    </div>
+  </div>
+
+  <h2 class="fade-in"><span class="eyebrow">08 — Best Practices</span>Tracing Best Practices</h2>
+  <div class="feat-list fade-in">
+    <div class="feat-item"><div class="feat-icon">&#9989;</div><div class="feat-body">
+      <div class="label">Always end your spans — use context managers or defer</div>
+      <div class="desc">Only the first call to end() takes effect. Use Python context managers, Go defer span.End(), or Java try-with-resources. A span that never ends leaks resources and appears missing in your backend.</div>
+    </div></div>
+    <div class="feat-item"><div class="feat-icon">&#9989;</div><div class="feat-body">
+      <div class="label">Call set_status(ERROR) after record_exception</div>
+      <div class="desc">record_exception() does not automatically set the span status. Always call set_status(StatusCode.ERROR) separately if the span tracks a failed operation — otherwise your span appears as a success.</div>
+    </div></div>
+    <div class="feat-item"><div class="feat-icon">&#9989;</div><div class="feat-body">
+      <div class="label">Set up one TracerProvider globally or via Dependency Injection</div>
+      <div class="desc">One provider, configured at startup, shared across your entire application. Never create multiple TracerProviders unless you need explicitly isolated configurations.</div>
+    </div></div>
+    <div class="feat-item"><div class="feat-icon">&#9989;</div><div class="feat-body">
+      <div class="label">Get named Tracers per module or service</div>
+      <div class="desc">Use get_tracer(__name__) in each module so you know exactly which component generated each span. The name becomes the InstrumentationScope in your backend.</div>
+    </div></div>
+    <div class="feat-item"><div class="feat-icon">&#9989;</div><div class="feat-body">
+      <div class="label">Use context propagation for distributed tracing</div>
+      <div class="desc">Always inject context into outgoing requests and extract it from incoming ones. Without this, traces break at service boundaries and you lose the full picture.</div>
+    </div></div>
+  </div>  <div class="next-reads fade-in">
+    <div class="next-reads-label">Continue Reading</div>
+    <div class="next-reads-grid">
+
+      <a href="distributed-tracing.html" class="next-card">
+        <div class="next-tag">Deep Dive</div>
+        <h4>Distributed Tracing</h4>
+        <p>Spans, context propagation, and propagation formats.</p>
+      </a>
+      
+      <a href="otel-instrumentation-auto.html" class="next-card">
+        <div class="next-tag">Part 2</div>
+        <h4>Libraries and Auto-Instrumentation</h4>
+        <p>Java agent, Python zero-code, instrumentation libraries.</p>
+      </a>
+      
+    </div>
+  </div>
+</article>
+<footer class="footer-dark">
+  <div class="footer-inner">
+    <a href="../index.html" class="footer-logo-dark"><span class="dot"></span>LearnObservability</a>
+    <span>© 2026 · Written by Thejasekhar Reddy.G</span>
+  </div>
+</footer>
+
+<script>
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach((e, i) => {
+    if (e.isIntersecting) {
+      setTimeout(() => e.target.classList.add('visible'), i * 80);
+      observer.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.12 });
+
+document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+</script>
+
+</body>
+</html>

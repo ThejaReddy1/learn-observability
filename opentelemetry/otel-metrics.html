@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Metrics in OpenTelemetry Part 1: Fundamentals · LearnObservability</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c10;
+    --surface: #0f1318;
+    --surface2: #151a22;
+    --border: #1e2530;
+    --accent: #00e5a0;
+    --accent2: #ff6b35;
+    --indigo: #818cf8;
+    --text: #d4dce8;
+    --text-muted: #6b7a8d;
+    --text-bright: #f0f4f8;
+    --heading-font: 'Syne', sans-serif;
+    --body-font: 'Lora', serif;
+    --mono-font: 'IBM Plex Mono', monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--body-font);
+    line-height: 1.8;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* NAV DARK */
+  .nav-dark {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 40px; height: 60px;
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0;
+    background: rgba(10,12,16,0.95);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px); z-index: 100;
+  }
+
+  .nav-dark .nav-logo {
+    font-family: var(--heading-font); font-size: 16px; font-weight: 800;
+    color: var(--text-bright); letter-spacing: -0.03em;
+    text-decoration: none; display: flex; align-items: center; gap: 8px;
+  }
+
+  .nav-dark .dot { width: 7px; height: 7px; background: var(--accent); border-radius: 50%; }
+
+  .nav-dark .nav-links { display: flex; align-items: center; gap: 24px; list-style: none; }
+
+  .nav-dark .nav-links a {
+    font-family: var(--heading-font); font-size: 13px; font-weight: 600;
+    color: var(--text-muted); text-decoration: none;
+    letter-spacing: 0.02em; transition: color 0.15s;
+  }
+
+  .nav-dark .nav-links a:hover { color: var(--text-bright); }
+
+  /* HERO */
+  .hero {
+    position: relative; padding: 88px 24px 72px;
+    text-align: center; border-bottom: 1px solid var(--border); overflow: hidden;
+  }
+
+  .hero::before {
+    content: ''; position: absolute; top: -80px; left: 50%;
+    transform: translateX(-50%); width: 700px; height: 400px;
+    background: radial-gradient(ellipse at center, rgba(0,229,160,0.07) 0%, transparent 65%);
+    pointer-events: none;
+  }
+
+  .hero-tags { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 26px; flex-wrap: wrap; }
+
+  .tag { display: inline-block; font-family: var(--mono-font); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; padding: 4px 11px; border-radius: 3px; }
+  .tag-green  { color: var(--accent);  border: 1px solid rgba(0,229,160,0.3);   background: rgba(0,229,160,0.05); }
+  .tag-indigo { color: var(--indigo);  border: 1px solid rgba(129,140,248,0.3); background: rgba(129,140,248,0.05); }
+  .tag-orange { color: var(--accent2); border: 1px solid rgba(255,107,53,0.3);  background: rgba(255,107,53,0.05); }
+  .tag-muted  { color: var(--text-muted); border: 1px solid var(--border); }
+
+  .hero h1 {
+    font-family: var(--heading-font); font-size: clamp(30px, 5vw, 52px);
+    font-weight: 800; color: var(--text-bright); line-height: 1.08;
+    max-width: 820px; margin: 0 auto 20px; letter-spacing: -0.03em;
+  }
+
+  .hero h1 em { color: var(--accent); font-style: normal; }
+  .hero .subtitle { font-family: var(--body-font); font-style: italic; color: var(--text-muted); font-size: 17px; max-width: 560px; margin: 0 auto 28px; line-height: 1.7; }
+  .hero-meta { font-family: var(--mono-font); font-size: 12px; color: var(--text-muted); letter-spacing: 0.05em; }
+
+  /* ARTICLE */
+  article { max-width: 1080px; margin: 0 auto; padding: 72px 24px 100px; }
+
+  h2 {
+    font-family: var(--heading-font); font-size: clamp(20px, 3vw, 27px);
+    font-weight: 700; color: var(--text-bright); margin: 68px 0 16px;
+    letter-spacing: -0.02em; padding-top: 32px; border-top: 1px solid var(--border);
+  }
+
+  h2:first-child { margin-top: 0; }
+
+  h2 .eyebrow {
+    display: block; font-family: var(--mono-font); font-size: 11px; font-weight: 400;
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px;
+  }
+
+  h2 .eyebrow-indigo { color: var(--indigo); }
+  h2 .eyebrow-orange { color: var(--accent2); }
+
+  h3 { font-family: var(--heading-font); font-size: 17px; font-weight: 700; color: var(--text-bright); margin: 40px 0 10px; }
+
+  p { margin-bottom: 20px; color: var(--text); font-size: 17px; }
+  p strong { color: var(--text-bright); font-weight: 600; font-family: var(--heading-font); }
+  p em { font-style: italic; }
+
+  code { font-family: var(--mono-font); font-size: 13px; background: var(--surface2); border: 1px solid var(--border); padding: 1px 7px; border-radius: 4px; color: var(--indigo); }
+
+  a { color: var(--accent); }
+
+  .pullquote { border-left: 3px solid var(--accent); background: rgba(0,229,160,0.04); border-radius: 0 6px 6px 0; padding: 20px 28px; margin: 32px 0; }
+  .pullquote p { font-style: italic; font-size: 19px; color: var(--text-bright); margin: 0; line-height: 1.65; }
+
+  .opinion { border: 1px solid rgba(129,140,248,0.25); background: rgba(129,140,248,0.04); border-radius: 8px; padding: 20px 24px; margin: 32px 0; }
+  .opinion .label { font-family: var(--mono-font); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--indigo); margin-bottom: 8px; }
+  .opinion p { margin: 0; font-size: 16px; color: #c7d2fe; font-style: italic; }
+
+  .info-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 28px; margin: 28px 0; }
+  .info-card .card-label { font-family: var(--mono-font); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; }
+  .info-card h3 { margin: 0 0 8px; font-size: 17px; }
+  .info-card p { margin: 0; font-size: 15px; color: var(--text-muted); }
+
+  .feat-list { display: flex; flex-direction: column; gap: 12px; margin: 20px 0 28px; }
+  .feat-item { display: flex; align-items: flex-start; gap: 14px; padding: 16px 18px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+  .feat-item:hover { border-color: rgba(0,229,160,0.2); }
+  .feat-icon { font-size: 18px; flex-shrink: 0; margin-top: 2px; }
+  .feat-body .label { font-family: var(--heading-font); font-size: 15px; font-weight: 700; color: var(--text-bright); margin-bottom: 3px; }
+  .feat-body .desc { font-size: 14px; color: var(--text-muted); line-height: 1.6; font-family: var(--body-font); }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0 28px; }
+  .grid-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; }
+  .grid-card h4 { font-family: var(--heading-font); font-size: 14px; font-weight: 700; color: var(--text-bright); margin-bottom: 6px; }
+  .grid-card p { font-size: 14px; color: var(--text-muted); margin: 0; line-height: 1.6; font-family: var(--body-font); }
+
+  hr.divider { border: none; border-top: 1px solid var(--border); margin: 0; }
+
+  /* NEXT READS */
+  .next-reads { margin-top: 72px; padding-top: 36px; border-top: 1px solid var(--border); }
+  .next-reads-label { font-family: var(--mono-font); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 16px; }
+  .next-reads-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+
+  .next-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 18px 20px; text-decoration: none; display: block; transition: border-color 0.2s; }
+  .next-card:hover { border-color: rgba(0,229,160,0.25); }
+  .next-card .next-tag { font-family: var(--mono-font); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; }
+  .next-card h4 { font-family: var(--heading-font); font-size: 14px; font-weight: 700; color: var(--text-bright); line-height: 1.3; margin-bottom: 5px; }
+  .next-card p { font-size: 13px; color: var(--text-muted); margin: 0; line-height: 1.5; font-family: var(--body-font); font-style: italic; }
+
+  /* DARK FOOTER */
+  .footer-dark { border-top: 1px solid var(--border); padding: 28px 40px; }
+  .footer-dark .footer-inner { max-width: 760px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; }
+  .footer-dark .footer-logo-dark { font-family: var(--heading-font); font-size: 15px; font-weight: 800; color: var(--text-bright); letter-spacing: -0.03em; text-decoration: none; display: flex; align-items: center; gap: 6px; }
+  .footer-dark .footer-logo-dark .dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; }
+  .footer-dark span { font-family: var(--mono-font); font-size: 12px; color: var(--text-muted); }
+
+  /* SECTION LANDING (dark) */
+  .section-landing { max-width: 1080px; margin: 0 auto; padding: 72px 40px 100px; }
+  .section-label { font-family: var(--mono-font); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; }
+  .section-landing h1 { font-family: var(--heading-font); font-size: clamp(28px, 4vw, 44px); font-weight: 800; color: var(--text-bright); letter-spacing: -0.03em; margin-bottom: 14px; }
+  .section-landing h1 em { color: var(--accent); font-style: normal; }
+  .section-landing > p { font-size: 17px; color: var(--text-muted); font-style: italic; max-width: 580px; line-height: 1.7; margin-bottom: 56px; font-family: var(--body-font); }
+
+  .articles-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; }
+
+  .article-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px; text-decoration: none; display: flex; flex-direction: column; gap: 12px; transition: border-color 0.2s, background 0.2s; }
+  .article-card:hover { border-color: rgba(0,229,160,0.25); background: var(--surface2); }
+  .article-card .card-tag { font-family: var(--mono-font); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 9px; border-radius: 3px; display: inline-block; width: fit-content; }
+  .article-card h2 { font-family: var(--heading-font); font-size: clamp(16px, 2vw, 20px); font-weight: 700; color: var(--text-bright); letter-spacing: -0.02em; line-height: 1.2; border: none; padding: 0; margin: 0; }
+  .article-card p { font-size: 14px; color: var(--text-muted); line-height: 1.65; font-style: italic; font-family: var(--body-font); margin: 0; flex: 1; }
+  .article-card .card-meta { font-family: var(--mono-font); font-size: 12px; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between; }
+  .article-card:hover .arrow { color: var(--accent); }
+
+  /* Coming soon card */
+  .article-card.coming-soon { opacity: 0.45; pointer-events: none; }
+  .coming-pill { font-family: var(--mono-font); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); border: 1px dashed var(--border); border-radius: 3px; padding: 2px 8px; display: inline-block; width: fit-content; }
+
+  @media (max-width: 640px) {
+    .nav-dark { padding: 0 16px; }
+    .nav-dark .nav-links { display: none; }
+    article { padding: 48px 16px 72px; }
+    .two-col { grid-template-columns: 1fr; }
+    .section-landing { padding: 48px 16px 72px; }
+    .footer-dark { padding: 20px 16px; }
+    .footer-dark .footer-inner { flex-direction: column; gap: 8px; text-align: center; }
+  }
+
+  .diagram-wrap {
+    margin: 40px -1px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 16px 16px;
+    overflow: hidden;
+  }
+
+  .diagram-label {
+    font-family: var(--mono-font);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    text-align: center;
+  }
+
+  .diagram-svg {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Scroll fade-in */
+  .fade-in {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+
+  .fade-in.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .fade-in { opacity: 0; transform: translateY(20px); transition: opacity 0.6s ease, transform 0.6s ease; }
+  .fade-in.visible { opacity: 1; transform: translateY(0); }
+
+  pre { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 20px 24px; font-family: var(--mono-font); font-size: 13px; color: #a5f3c0;
+    overflow-x: auto; margin: 20px 0 28px; line-height: 1.8; }
+
+  .monitoring-table { width: 100%; border-collapse: collapse; margin: 20px 0 28px; }
+  .monitoring-table th { font-family: var(--mono-font); font-size: 11px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--text-muted); padding: 10px 14px;
+    border-bottom: 1px solid var(--border); text-align: left; background: var(--surface2); }
+  .monitoring-table td { padding: 11px 14px; border-bottom: 1px solid var(--border);
+    font-size: 13px; color: var(--text-muted); vertical-align: top; }
+  .monitoring-table tr:hover td { background: var(--surface); }
+  .monitoring-table td:first-child { font-family: var(--mono-font); font-size: 12px; color: var(--accent); }
+
+  .agg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 20px 0 28px; }
+  .agg-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 18px; }
+  .agg-card h4 { font-family: var(--heading-font); font-size: 14px; font-weight: 700; color: var(--text-bright); margin-bottom: 6px; }
+  .agg-card .agg-tag { font-family: var(--mono-font); font-size: 10px; padding: 2px 8px; border-radius: 3px; display: inline-block; margin-bottom: 8px; }
+  .agg-card p { font-size: 13px; color: var(--text-muted); margin: 0; line-height: 1.6; font-family: var(--body-font); }
+
+  @media (max-width: 640px) { .agg-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<nav class="nav-dark">
+  <a href="../index.html" class="nav-logo"><span class="dot"></span>LearnObservability</a>
+  <ul class="nav-links">
+    <li><a href="../opentelemetry/index.html">OpenTelemetry</a></li>
+    <li><a href="../prometheus/index.html">Prometheus</a></li>
+    <li><a href="../kubernetes/index.html">Kubernetes</a></li>
+    <li><a href="../elastic/index.html">Elastic</a></li>
+  </ul>
+</nav>
+
+<header class="hero">
+  <div class="hero-tags">
+    <span class="tag tag-green">Deep Dive</span>
+    <span class="tag tag-indigo">Metrics</span>
+    <span class="tag tag-muted">16 min read</span>
+  </div>
+  <h1>Metrics in OpenTelemetry<br><em>Part 1: Fundamentals</em></h1>
+  <p class="subtitle">What a metric actually is, how to think about monitoring different layers of your system, and the structural properties — monotonicity, temporality, dimensions, cardinality — that determine how metrics behave and how you should interpret them.</p>
+  <div class="hero-meta">Thejasekhar Reddy.G &nbsp;·&nbsp; April 6, 2026</div>
+</header>
+
+<article>
+
+  <!-- 01 -->
+  <h2 class="fade-in"><span class="eyebrow">01 — Anatomy</span>What's Inside a Metric</h2>
+
+  <p>A metric is not just a number. Every metric data point carries four things: a name that identifies what you're measuring, a value that is the actual measurement, a unit that tells you the scale, and dimensions — key-value attributes that add context to the data point.</p>
+
+  
+<div class="diagram-wrap" aria-hidden="true">
+  <div class="diagram-label">Anatomy of a Metric — Name, Value, Unit, and Dimensions</div>
+  <svg viewBox="0 0 600 200" xmlns="http://www.w3.org/2000/svg" class="diagram-svg">
+    <defs>
+      <filter id="amf"><feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    </defs>
+
+    <!-- Outer metric box -->
+    <rect x="10" y="10" width="578" height="178" rx="10" fill="#0f1318" stroke="#10b981" stroke-width="2"/>
+    <rect x="10" y="10" width="160" height="22" rx="4" fill="#10b981"/>
+    <text x="18" y="26" fill="#000" font-size="10" font-family="IBM Plex Mono" font-weight="700">container.cpu.usage</text>
+
+    <!-- Name + Value + Unit -->
+    <rect x="24" y="40" width="160" height="44" rx="6" fill="#0a0c10" stroke="#10b981" stroke-width="1.3"/>
+    <text x="104" y="58" fill="#10b981" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Metric Name</text>
+    <text x="104" y="72" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">container.cpu.usage</text>
+
+    <rect x="194" y="40" width="130" height="44" rx="6" fill="#0a0c10" stroke="#818cf8" stroke-width="1.3"/>
+    <text x="259" y="58" fill="#818cf8" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Data Point Value</text>
+    <text x="259" y="72" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">0.65</text>
+
+    <rect x="334" y="40" width="130" height="44" rx="6" fill="#0a0c10" stroke="#fbbf24" stroke-width="1.3"/>
+    <text x="399" y="58" fill="#fbbf24" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Unit</text>
+    <text x="399" y="72" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">1 (ratio, 0–1)</text>
+
+    <!-- Dimensions label -->
+    <text x="24" y="102" fill="#f97316" font-size="10" font-family="IBM Plex Mono" font-weight="600">Dimensions (attributes) — context that adds meaning to the value</text>
+
+    <!-- Dimension pills -->
+    <rect x="24"  y="112" width="138" height="22" rx="4" fill="#0a0c10" stroke="#f97316" stroke-width="1"/>
+    <text x="93" y="127" fill="#f97316" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">container.id: "abc128"</text>
+
+    <rect x="170" y="112" width="158" height="22" rx="4" fill="#0a0c10" stroke="#f97316" stroke-width="1"/>
+    <text x="249" y="127" fill="#f97316" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">container.name: "cart-service"</text>
+
+    <rect x="336" y="112" width="170" height="22" rx="4" fill="#0a0c10" stroke="#f97316" stroke-width="1"/>
+    <text x="421" y="127" fill="#f97316" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">container.runtime: "docker"</text>
+
+    <rect x="24"  y="142" width="80"  height="22" rx="4" fill="#0a0c10" stroke="#6b7a8d" stroke-width="1"/>
+    <text x="64" y="157" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">cpu: "cpu0"</text>
+
+    <rect x="112" y="142" width="90"  height="22" rx="4" fill="#0a0c10" stroke="#6b7a8d" stroke-width="1"/>
+    <text x="157" y="157" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">state: "user"</text>
+
+    <rect x="210" y="142" width="160" height="22" rx="4" fill="#0a0c10" stroke="#6b7a8d" stroke-width="1"/>
+    <text x="290" y="157" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">cloud.region: "us-east-1"</text>
+
+    <rect x="378" y="142" width="196" height="22" rx="4" fill="#0a0c10" stroke="#6b7a8d" stroke-width="1"/>
+    <text x="476" y="157" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">deployment.environment: "prod"</text>
+
+    <text x="24" y="182" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono">One metric with multiple dimensions — each unique combination of dimension values = one time series</text>
+  </svg>
+</div>
+
+
+  <div class="feat-list fade-in">
+    <div class="feat-item">
+      <div class="feat-icon">🏷️</div>
+      <div class="feat-body">
+        <div class="label">Metric Name</div>
+        <div class="desc">Identifies what you are measuring. Convention is dot-separated, describing the source and measurement — <code>container.cpu.usage</code>, <code>http.requests.total</code>, <code>db.query.duration</code>. A good metric name is specific enough to be unambiguous and general enough to apply across instances.</div>
+      </div>
+    </div>
+    <div class="feat-item">
+      <div class="feat-icon">🔢</div>
+      <div class="feat-body">
+        <div class="label">Data Point Value</div>
+        <div class="desc">The raw measurement — a number. In the example above, <code>0.65</code> means 65% CPU usage. What this number means depends on the unit and the aggregation type.</div>
+      </div>
+    </div>
+    <div class="feat-item">
+      <div class="feat-icon">📏</div>
+      <div class="feat-body">
+        <div class="label">Unit</div>
+        <div class="desc">Describes the scale — <code>1</code> means a ratio (0 to 1), <code>ms</code> means milliseconds, <code>By</code> means bytes. Units matter for correct interpretation and aggregation. Mismatched units in your dashboards are a common source of confusion.</div>
+      </div>
+    </div>
+    <div class="feat-item">
+      <div class="feat-icon">📐</div>
+      <div class="feat-body">
+        <div class="label">Dimensions (Attributes)</div>
+        <div class="desc">Key-value pairs that add context to the data point. They are what makes a metric useful for filtering and debugging — without dimensions, you know CPU is at 65% but not which container, which region, or which environment. Each unique combination of dimension values creates a separate time series.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 02 -->
+  <h2 class="fade-in"><span class="eyebrow">02 — What to Measure</span>Web Application Monitoring — A Layered View</h2>
+
+  <p>Every layer of your application answers different questions — and needs different metrics. Here's a practical map of what to monitor at each layer and which metrics answer the important questions.</p>
+
+  <table class="monitoring-table fade-in">
+    <thead>
+      <tr><th>Layer</th><th>What you need to know</th><th>Key metrics</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Frontend</td><td>User experience, responsiveness</td><td>Page Load Time, JS Error Rate</td></tr>
+      <tr><td>API Gateway</td><td>Overall traffic and health of endpoints</td><td>Request Count, Error Rate, Latency</td></tr>
+      <tr><td>Backend App</td><td>Performance of core logic and services</td><td>DB Query Time, Cache Hit Rate</td></tr>
+      <tr><td>Infrastructure</td><td>Resource usage and system health</td><td>CPU, Memory, Disk I/O, Network</td></tr>
+    </tbody>
+  </table>
+
+  <div class="two-col fade-in">
+    <div class="grid-card">
+      <h4>Database Monitoring</h4>
+      <p><code>query.duration</code>, <code>connections.open</code>, <code>transactions.aborted</code>, <code>read/write IOPS</code> — the signals that tell you whether your database is healthy or struggling under load.</p>
+    </div>
+    <div class="grid-card">
+      <h4>CI/CD Pipeline Metrics</h4>
+      <p><code>build.duration</code>, <code>build.failure.count</code>, <code>deployment.latency</code>, <code>test.coverage.ratio</code> — and DORA metrics for measuring delivery performance at the team level.</p>
+    </div>
+  </div>
+
+  <!-- 03 -->
+  <h2 class="fade-in"><span class="eyebrow">03 — Structural Properties</span>Monotonicity, Temporality, Dimensions, Cardinality</h2>
+
+  <p>Every metric has four structural properties. These properties determine how the metric should be collected, aggregated, stored, and interpreted. Getting them wrong leads to double-counting, data skew, or queries that return incorrect results.</p>
+
+  
+<div class="diagram-wrap" aria-hidden="true">
+  <div class="diagram-label">Monotonicity and Temporality — two structural properties of every metric</div>
+  <svg viewBox="0 0 670 160" xmlns="http://www.w3.org/2000/svg" class="diagram-svg">
+    <defs>
+      <filter id="mtf"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    </defs>
+
+    <!-- Monotonicity side -->
+    <rect x="10" y="10" width="320" height="140" rx="10" fill="#0f1318" stroke="#10b981" stroke-width="1.8"/>
+    <rect x="10" y="10" width="320" height="22" rx="5" fill="#10b981"/>
+    <text x="175" y="26" fill="#000" font-size="10" font-family="IBM Plex Mono" text-anchor="middle" font-weight="700">Monotonicity</text>
+    <text x="170" y="48" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">property of a metric where its value only increases (monotonic)</text>
+    <text x="165" y="60" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">or can decrease as well (non-monotonic)</text>
+
+    <rect x="34" y="70" width="118" height="66" rx="7" fill="#0a0c10" stroke="#10b981" stroke-width="1.2"/>
+    <text x="93" y="88" fill="#10b981" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Monotonic ↑</text>
+    <text x="93" y="102" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono" text-anchor="middle">only increases</text>
+    <text x="93" y="115" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono" text-anchor="middle">Counters</text>
+    <text x="93" y="128" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">http.request.count</text>
+
+    <rect x="168" y="70" width="128" height="66" rx="7" fill="#0a0c10" stroke="#f97316" stroke-width="1.2"/>
+    <text x="232" y="88" fill="#f97316" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Non-monotonic ↑↓</text>
+    <text x="232" y="102" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono" text-anchor="middle">can go up and down</text>
+    <text x="232" y="115" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono" text-anchor="middle">Gauges</text>
+    <text x="232" y="128" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">cpu.usage, memory</text>
+
+    <!-- Temporality side -->
+    <rect x="340" y="10" width="320" height="140" rx="10" fill="#0f1318" stroke="#818cf8" stroke-width="1.8"/>
+    <rect x="340" y="10" width="320" height="22" rx="5" fill="#818cf8"/>
+    <text x="495" y="26" fill="#fff" font-size="10" font-family="IBM Plex Mono" text-anchor="middle" font-weight="700">Temporality</text>
+    <text x="495" y="48" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">how a metric's value relates to time — whether it represents a</text>
+    <text x="499" y="60" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">total since start (cumulative) or a change over interval (delta)</text>
+
+    <rect x="354" y="70" width="118" height="66" rx="7" fill="#0a0c10" stroke="#818cf8" stroke-width="1.2"/>
+    <text x="413" y="88" fill="#818cf8" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Cumulative</text>
+    <text x="413" y="102" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono" text-anchor="middle">sum of all since start</text>
+    <text x="413" y="115" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono" text-anchor="middle">always growing</text>
+    <text x="413" y="128" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">total requests ever</text>
+
+    <rect x="498" y="70" width="128" height="66" rx="7" fill="#0a0c10" stroke="#fbbf24" stroke-width="1.2"/>
+    <text x="562" y="88" fill="#fbbf24" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Delta</text>
+    <text x="562" y="102" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono" text-anchor="middle">based on point in time</text>
+    <text x="562" y="115" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono" text-anchor="middle">change since last obs</text>
+    <text x="562" y="128" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">requests in last 60s</text>
+  </svg>
+</div>
+
+
+  <h3 class="fade-in">Monotonicity</h3>
+
+  <p>Monotonicity refers to the property of a metric where its value only increases (monotonic) over time, or it can decrease as well (non-monotonic). <strong>Monotonicity helps you choose the right instrument</strong> — Counter or Gauge — and ensures correct metric aggregation.</p>
+
+  <div class="two-col fade-in">
+    <div class="grid-card">
+      <h4>Monotonic — Counters</h4>
+      <p>Value only increases. Example: <code>http.request.count</code>. Once a request is counted it can never be uncounted. Resets only happen when the process restarts.</p>
+    </div>
+    <div class="grid-card">
+      <h4>Non-monotonic — Gauges</h4>
+      <p>Value can go up and down. Example: <code>cpu.usage</code>, <code>memory.usage</code>. These represent a current state of something, not an accumulation.</p>
+    </div>
+  </div>
+
+  <h3 class="fade-in">Temporality</h3>
+
+  <p>Temporality defines how a metric's value relates to time — whether it represents a total since the start (cumulative) or a change over an interval (delta). Choosing the right temporality impacts your ability to calculate correct rates, averages, and percentiles. Misinterpreting temporality — for example treating a cumulative metric as a delta — can lead to double-counting or underreporting.</p>
+
+  <div class="two-col fade-in">
+    <div class="grid-card">
+      <h4>Cumulative</h4>
+      <p>A total since the start. Sum of all values. Always growing — unless the process restarts. Correct interpretation of data, storage-efficient. Some backends expect cumulative-style input.</p>
+    </div>
+    <div class="grid-card">
+      <h4>Delta</h4>
+      <p>A change over an interval — based on point in time. Delta metrics reduce duplication and can be more efficient for frequent scrapes or exports. Some backends might work better on delta data.</p>
+    </div>
+  </div>
+
+  <!-- 04 -->
+  <h2 class="fade-in"><span class="eyebrow">04 — Dimensions &amp; Cardinality</span>Context That Adds Meaning — and Cost</h2>
+
+  <p>A dimension is an attribute associated with the metric. Attributes add context to the data points. One metric can have multiple attributes or multiple dimensions — each unique combination of dimension values becomes a separate time series in your backend.</p>
+
+  <div class="two-col fade-in">
+    <div class="grid-card">
+      <h4>Low Cardinality</h4>
+      <p>Small set of known values. Example: <code>http.method</code> has GET, POST, PUT, DELETE. Efficient to store and query. Low cost in your backend.</p>
+    </div>
+    <div class="grid-card">
+      <h4>High Cardinality</h4>
+      <p>Many unique values. Example: <code>user.id</code> — potentially millions of unique values. Each becomes a separate time series. High cardinality impacts cost, memory, and performance.</p>
+    </div>
+  </div>
+
+  <div class="opinion fade-in">
+    <div class="label">Cardinality is core to diagnosing anomalies</div>
+    <p>Cardinality is core to diagnosing anomalies and outliners. High cardinality is essential for root cause analysis — but must be used carefully. Unique dimension values drive cardinality. OTel can enrich metrics with dimensions, additional labels, or resource attributes — but always think about the cardinality impact before adding a new dimension.</p>
+  </div>
+
+  <!-- 05 -->
+  <h2 class="fade-in"><span class="eyebrow">05 — Aggregation</span>Combining Raw Data Points Into Statistical Summaries</h2>
+
+  <p>Aggregation is the process of combining raw metric data points into a statistical summary. It is how individual measurements from many sources become the numbers you see on your dashboard.</p>
+
+  <div class="agg-grid fade-in">
+    <div class="agg-card">
+      <h4>Sum</h4>
+      <span class="agg-tag tag-green">Counter / Monotonic</span>
+      <p>Total of all values. Used with Counters. In OTLP: Sum maps to Counter (monotonic cumulative) or UpDownCounter (non-monotonic). With histograms we find out latencies.</p>
+    </div>
+    <div class="agg-card">
+      <h4>Gauge</h4>
+      <span class="agg-tag tag-muted">Last sampled value</span>
+      <p>Last sampled value. Used when you need current state — CPU usage, memory, queue depth. In OTLP: Gauge maps directly to Gauge instrument.</p>
+    </div>
+    <div class="agg-card">
+      <h4>Histogram</h4>
+      <span class="agg-tag tag-indigo">Distributed across buckets</span>
+      <p>Distributed across buckets. Histogram is the metric instrument that captures the duration of recorded values (e.g. durations, sizes). Helps compute percentiles, distributions, and summaries efficiently. Ideal for performance analysis.</p>
+    </div>
+    <div class="agg-card">
+      <h4>Exponential Histogram</h4>
+      <span class="agg-tag tag-orange">Compressed variant</span>
+      <p>Compressed variant for large-range data. More efficient than regular histograms for data that spans many orders of magnitude.</p>
+    </div>
+  </div>
+
+  <div class="info-card fade-in">
+    <div class="card-label">Histogram example</div>
+    <h3>Tracking request durations in a web server</h3>
+    <p>Metric: <code>http.server.duration</code> · Unit: milliseconds · Instrument Type: Histogram · Scenario: tracking request durations in a web server. Histograms help compute percentiles, distributions, and summaries efficiently — so you can answer questions like "what was the p99 latency in the last 5 minutes?"</p>
+  </div>
+
+  <!-- 06 -->
+  <h2 class="fade-in"><span class="eyebrow">06 — OTel Metrics Model</span>The Data Journey and Four Foundations</h2>
+
+  <p>The OTel Metrics Model stands on four foundations. Together they ensure that downstream systems don't misinterpret values.</p>
+
+  
+<div class="diagram-wrap" aria-hidden="true">
+  <div class="diagram-label">OTel Metrics Model — four foundations</div>
+  <svg viewBox="0 0 600 110" xmlns="http://www.w3.org/2000/svg" class="diagram-svg">
+    <defs>
+      <filter id="omf"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      <marker id="oma" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+        <path d="M0,0 L6,3 L0,6 Z" fill="#1e2530"/>
+      </marker>
+    </defs>
+
+    <rect x="10" y="30" width="128" height="50" rx="7" fill="#0f1318" stroke="#10b981" stroke-width="1.5"/>
+    <text x="74" y="52" fill="#10b981" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Protocols &amp;</text>
+    <text x="74" y="65" fill="#10b981" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Semantics</text>
+    <text x="74" y="90" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">standardized metric model</text>
+    <line x1="138" y1="55" x2="158" y2="55" stroke="#1e2530" stroke-width="1.2" marker-end="url(#oma)"/>
+
+    <rect x="158" y="30" width="128" height="50" rx="7" fill="#0f1318" stroke="#818cf8" stroke-width="1.5"/>
+    <text x="222" y="58" fill="#818cf8" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Interoperability</text>
+    <text x="222" y="90" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">system compatibility</text>
+    <line x1="286" y1="55" x2="306" y2="55" stroke="#1e2530" stroke-width="1.2" marker-end="url(#oma)"/>
+
+    <rect x="306" y="30" width="128" height="50" rx="7" fill="#0f1318" stroke="#fbbf24" stroke-width="1.5"/>
+    <text x="370" y="52" fill="#fbbf24" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Smart Data</text>
+    <text x="370" y="65" fill="#fbbf24" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Handling</text>
+    <text x="370" y="90" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">efficient data transformations</text>
+    <line x1="434" y1="55" x2="454" y2="55" stroke="#1e2530" stroke-width="1.2" marker-end="url(#oma)"/>
+
+    <rect x="454" y="30" width="134" height="50" rx="7" fill="#0f1318" stroke="#f97316" stroke-width="1.5"/>
+    <text x="521" y="52" fill="#f97316" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Future Proof</text>
+    <text x="521" y="65" fill="#f97316" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Design</text>
+    <text x="521" y="90" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">extensible &amp; robust</text>
+
+  </svg>
+</div>
+
+
+  <p>OTel applies <strong>unit normalization</strong> so downstream systems don't misinterpret values. <strong>AggregationTemporality</strong> defines whether a metric reports a running cumulative total or a delta change since last observation. <strong>Cumulative vs Delta</strong> — it's a transformation. A delta can be converted into cumulative or vice-versa, depending on backend needs. <strong>Dimension Enrichment</strong> — OTel can enrich metrics with dimensions, additional labels or resource attributes.<strong> Spatial reaggreation</strong> — Simplify attributes.<strong> Temporal reaggreation</strong> — rollup timeseries.</p>
+
+
+  
+<div class="diagram-wrap" aria-hidden="true">
+  <div class="diagram-label">Metric Data Journey — Event Model → OTLP Stream → TimeSeries Model</div>
+  <svg viewBox="0 0 620 185" xmlns="http://www.w3.org/2000/svg" class="diagram-svg">
+    <defs>
+      <filter id="djf"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      <marker id="dja" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+        <path d="M0,0 L6,3 L0,6 Z" fill="#1e2530"/>
+      </marker>
+    </defs>
+
+    <!-- Event Model -->
+    <rect x="10" y="10" width="170" height="170" rx="8" fill="#0f1318" stroke="#10b981" stroke-width="1.8"/>
+    <rect x="10" y="10" width="170" height="20" rx="5" fill="#10b981"/>
+    <text x="95" y="24" fill="#000" font-size="9" font-family="IBM Plex Mono" text-anchor="middle" font-weight="600">Event Model (Origin)</text>
+    <text x="95" y="46" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono" text-anchor="middle">metrics begin as raw observations</text>
+    <text x="22" y="60" fill="#10b981" font-size="8" font-family="IBM Plex Mono">Instrumentation</text>
+    <text x="22" y="72" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono">Apps use APIs to record</text>
+    <text x="22" y="82" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono">raw metric events</text>
+    <text x="22" y="98" fill="#10b981" font-size="8" font-family="IBM Plex Mono">Metric Instruments</text>
+    <text x="22" y="111" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono">Counters, Gauges,</text>
+    <text x="22" y="122" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono">Histograms capture perf</text>
+    <text x="22" y="132" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono">raw metric events</text>
+    <text x="22" y="148" fill="#10b981" font-size="8" font-family="IBM Plex Mono">Attributes & Context</text>
+    <text x="22" y="161" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono">Events include attributes for</text>
+    <text x="22" y="172" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono">filtering & rich analysis</text>
+
+    <line x1="180" y1="85" x2="200" y2="85" stroke="#1e2530" stroke-width="1.3" marker-end="url(#dja)"/>
+
+    <!-- OTLP Stream Model -->
+    <rect x="200" y="10" width="210" height="160" rx="8" fill="#0f1318" stroke="#818cf8" stroke-width="1.8"/>
+    <rect x="200" y="10" width="210" height="20" rx="5" fill="#818cf8"/>
+    <text x="305" y="24" fill="#fff" font-size="9" font-family="IBM Plex Mono" text-anchor="middle" font-weight="600">OTLP Stream (Transit)</text>
+    <text x="305" y="44" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono" text-anchor="middle">metrics transported efficiently via OTLP</text>
+    
+    <text x="305" y="65" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono, monospace" text-anchor="middle">Raw Events</text> 
+    <line x1="305" y1="71" x2="305" y2="81" stroke="#818cf8" stroke-width="1.2" marker-end="url(#dja)"/>
+    <text x="305" y="93" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono, monospace" text-anchor="middle">SDK Transform</text>
+    <line x1="305" y1="99" x2="305" y2="109" stroke="#818cf8" stroke-width="1.2" marker-end="url(#dja)"/>
+    <text x="305" y="121" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono, monospace" text-anchor="middle">Data Streaming</text>
+    <line x1="305" y1="127" x2="305" y2="137" stroke="#818cf8" stroke-width="1.2" marker-end="url(#dja)"/>
+    <text x="305" y="149" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono, monospace" text-anchor="middle">Export Protocol</text>
+
+    
+    <line x1="410" y1="85" x2="430" y2="85" stroke="#1e2530" stroke-width="1.3" marker-end="url(#dja)"/>
+
+    <!-- TimeSeries Model -->
+    <rect x="430" y="10" width="178" height="160" rx="8" fill="#0f1318" stroke="#fbbf24" stroke-width="1.8"/>
+    <rect x="430" y="10" width="178" height="20" rx="5" fill="#fbbf24"/>
+    <text x="519" y="24" fill="#000" font-size="9" font-family="IBM Plex Mono" text-anchor="middle" font-weight="600">TimeSeries Model (At Rest)</text>
+    <text x="519" y="44" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono" text-anchor="middle">metrics stored in timeseries DB</text>
+
+    <text x="442" y="66" fill="#fbbf24" font-size="8" font-family="IBM Plex Mono">Temporal Reaggregation</text>
+    <text x="442" y="79" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono">adjusts frequency — 10s→60s</text>
+    <text x="442" y="92" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono">reducing storage</text>
+    <text x="442" y="120" fill="#fbbf24" font-size="8" font-family="IBM Plex Mono">Spatial Reaggregation</text>
+    <text x="442" y="133" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono">drops attributes to reduce</text>
+    <text x="442" y="144" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono">cardinality explosion</text>
+
+    <!-- Animated -->
+    <circle r="4" fill="#10b981" filter="url(#djf)">
+      <animateMotion dur="3s" repeatCount="indefinite" begin="0s" path="M10,85 L608,85"/>
+      <animate attributeName="fill" values="#10b981;#818cf8;#fbbf24" keyTimes="0;0.42;0.85" dur="3s" repeatCount="indefinite"/>
+    </circle>
+  </svg>
+</div>
+
+
+  <h3 class="fade-in">Reaggregation</h3>
+
+  <p>Before Metrics reaching backed it goes through some form of transformation.</p>
+  <div class="two-col fade-in">
+    <div class="grid-card">
+      <h4>Temporal Reaggregation</h4>
+      <p>Adjusts the frequency of data. Converts high-frequency metrics into longer intervals (10s → 60s), reducing storage while preserving trends.</p>
+    </div>
+    <div class="grid-card">
+      <h4>Spatial Reaggregation</h4>
+      <p>Drops unwanted attributes to reduce dimensionality and avoid cardinality explosion. Simplifies attributes before sending to storage.</p>
+    </div>
+  </div>
+  <div class="grid-card">
+      <h4>Delta to Cumulative Conversion</h4>
+      <p>Transforms delta metrics into cumulative totals, shifting state management to Collectors. All reaggregation is applied at SDK or Collector to optimize cost, reliability, and resources.</p>
+    </div>
+  </div>
+
+  
+  <div class="next-reads fade-in">
+    <div class="next-reads-label">Continue Reading</div>
+    <div class="next-reads-grid">
+
+      <a href="otel-instrumentation-auto.html" class="next-card">
+        <div class="next-tag">Part 2</div>
+        <h4>Libraries and Auto-Instrumentation</h4>
+        <p>Java agent, Python zero-code, instrumentation libraries.</p>
+      </a>
+
+      <a href="otel-metrics-sdk.html" class="next-card">
+        <div class="next-tag">Part 2</div>
+        <h4>Metrics Instruments &amp; SDK</h4>
+        <p>Counter, Gauge, Histogram, MeterProvider, pipeline, exporters, exemplars.</p>
+      </a>
+      
+    </div>
+  </div>
+
+</article>
+
+<footer class="footer-dark">
+  <div class="footer-inner">
+    <a href="../index.html" class="footer-logo-dark"><span class="dot"></span>LearnObservability</a>
+    <span>© 2026 · Written by Thejasekhar Reddy.G</span>
+  </div>
+</footer>
+
+<script>
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach((e, i) => {
+    if (e.isIntersecting) {
+      setTimeout(() => e.target.classList.add('visible'), i * 80);
+      observer.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.12 });
+
+document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+</script>
+
+</body>
+</html>

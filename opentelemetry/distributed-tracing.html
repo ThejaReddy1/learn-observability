@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Distributed Tracing with OpenTelemetry · LearnObservability</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c10;
+    --surface: #0f1318;
+    --surface2: #151a22;
+    --border: #1e2530;
+    --accent: #00e5a0;
+    --accent2: #ff6b35;
+    --indigo: #818cf8;
+    --text: #d4dce8;
+    --text-muted: #6b7a8d;
+    --text-bright: #f0f4f8;
+    --heading-font: 'Syne', sans-serif;
+    --body-font: 'Lora', serif;
+    --mono-font: 'IBM Plex Mono', monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--body-font);
+    line-height: 1.8;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* NAV DARK */
+  .nav-dark {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 40px; height: 60px;
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0;
+    background: rgba(10,12,16,0.95);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px); z-index: 100;
+  }
+
+  .nav-dark .nav-logo {
+    font-family: var(--heading-font); font-size: 16px; font-weight: 800;
+    color: var(--text-bright); letter-spacing: -0.03em;
+    text-decoration: none; display: flex; align-items: center; gap: 8px;
+  }
+
+  .nav-dark .dot { width: 7px; height: 7px; background: var(--accent); border-radius: 50%; }
+
+  .nav-dark .nav-links { display: flex; align-items: center; gap: 24px; list-style: none; }
+
+  .nav-dark .nav-links a {
+    font-family: var(--heading-font); font-size: 13px; font-weight: 600;
+    color: var(--text-muted); text-decoration: none;
+    letter-spacing: 0.02em; transition: color 0.15s;
+  }
+
+  .nav-dark .nav-links a:hover { color: var(--text-bright); }
+
+  /* HERO */
+  .hero {
+    position: relative; padding: 88px 24px 72px;
+    text-align: center; border-bottom: 1px solid var(--border); overflow: hidden;
+  }
+
+  .hero::before {
+    content: ''; position: absolute; top: -80px; left: 50%;
+    transform: translateX(-50%); width: 700px; height: 400px;
+    background: radial-gradient(ellipse at center, rgba(0,229,160,0.07) 0%, transparent 65%);
+    pointer-events: none;
+  }
+
+  .hero-tags { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 26px; flex-wrap: wrap; }
+
+  .tag { display: inline-block; font-family: var(--mono-font); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; padding: 4px 11px; border-radius: 3px; }
+  .tag-green  { color: var(--accent);  border: 1px solid rgba(0,229,160,0.3);   background: rgba(0,229,160,0.05); }
+  .tag-indigo { color: var(--indigo);  border: 1px solid rgba(129,140,248,0.3); background: rgba(129,140,248,0.05); }
+  .tag-orange { color: var(--accent2); border: 1px solid rgba(255,107,53,0.3);  background: rgba(255,107,53,0.05); }
+  .tag-muted  { color: var(--text-muted); border: 1px solid var(--border); }
+
+  .hero h1 {
+    font-family: var(--heading-font); font-size: clamp(30px, 5vw, 52px);
+    font-weight: 800; color: var(--text-bright); line-height: 1.08;
+    max-width: 820px; margin: 0 auto 20px; letter-spacing: -0.03em;
+  }
+
+  .hero h1 em { color: var(--accent); font-style: normal; }
+  .hero .subtitle { font-family: var(--body-font); font-style: italic; color: var(--text-muted); font-size: 17px; max-width: 560px; margin: 0 auto 28px; line-height: 1.7; }
+  .hero-meta { font-family: var(--mono-font); font-size: 12px; color: var(--text-muted); letter-spacing: 0.05em; }
+
+  /* ARTICLE */
+  article { max-width: 1080px; margin: 0 auto; padding: 72px 24px 100px; }
+
+  h2 {
+    font-family: var(--heading-font); font-size: clamp(20px, 3vw, 27px);
+    font-weight: 700; color: var(--text-bright); margin: 68px 0 16px;
+    letter-spacing: -0.02em; padding-top: 32px; border-top: 1px solid var(--border);
+  }
+
+  h2:first-child { margin-top: 0; }
+
+  h2 .eyebrow {
+    display: block; font-family: var(--mono-font); font-size: 11px; font-weight: 400;
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px;
+  }
+
+  h2 .eyebrow-indigo { color: var(--indigo); }
+  h2 .eyebrow-orange { color: var(--accent2); }
+
+  h3 { font-family: var(--heading-font); font-size: 17px; font-weight: 700; color: var(--text-bright); margin: 40px 0 10px; }
+
+  p { margin-bottom: 20px; color: var(--text); font-size: 17px; }
+  p strong { color: var(--text-bright); font-weight: 600; font-family: var(--heading-font); }
+  p em { font-style: italic; }
+
+  code { font-family: var(--mono-font); font-size: 13px; background: var(--surface2); border: 1px solid var(--border); padding: 1px 7px; border-radius: 4px; color: var(--indigo); }
+
+  a { color: var(--accent); }
+
+  .pullquote { border-left: 3px solid var(--accent); background: rgba(0,229,160,0.04); border-radius: 0 6px 6px 0; padding: 20px 28px; margin: 32px 0; }
+  .pullquote p { font-style: italic; font-size: 19px; color: var(--text-bright); margin: 0; line-height: 1.65; }
+
+  .opinion { border: 1px solid rgba(129,140,248,0.25); background: rgba(129,140,248,0.04); border-radius: 8px; padding: 20px 24px; margin: 32px 0; }
+  .opinion .label { font-family: var(--mono-font); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--indigo); margin-bottom: 8px; }
+  .opinion p { margin: 0; font-size: 16px; color: #c7d2fe; font-style: italic; }
+
+  .info-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 28px; margin: 28px 0; }
+  .info-card .card-label { font-family: var(--mono-font); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; }
+  .info-card h3 { margin: 0 0 8px; font-size: 17px; }
+  .info-card p { margin: 0; font-size: 15px; color: var(--text-muted); }
+
+  .feat-list { display: flex; flex-direction: column; gap: 12px; margin: 20px 0 28px; }
+  .feat-item { display: flex; align-items: flex-start; gap: 14px; padding: 16px 18px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+  .feat-item:hover { border-color: rgba(0,229,160,0.2); }
+  .feat-icon { font-size: 18px; flex-shrink: 0; margin-top: 2px; }
+  .feat-body .label { font-family: var(--heading-font); font-size: 15px; font-weight: 700; color: var(--text-bright); margin-bottom: 3px; }
+  .feat-body .desc { font-size: 14px; color: var(--text-muted); line-height: 1.6; font-family: var(--body-font); }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0 28px; }
+  .grid-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; }
+  .grid-card h4 { font-family: var(--heading-font); font-size: 14px; font-weight: 700; color: var(--text-bright); margin-bottom: 6px; }
+  .grid-card p { font-size: 14px; color: var(--text-muted); margin: 0; line-height: 1.6; font-family: var(--body-font); }
+
+  hr.divider { border: none; border-top: 1px solid var(--border); margin: 0; }
+
+  /* NEXT READS */
+  .next-reads { margin-top: 72px; padding-top: 36px; border-top: 1px solid var(--border); }
+  .next-reads-label { font-family: var(--mono-font); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 16px; }
+  .next-reads-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+
+  .next-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 18px 20px; text-decoration: none; display: block; transition: border-color 0.2s; }
+  .next-card:hover { border-color: rgba(0,229,160,0.25); }
+  .next-card .next-tag { font-family: var(--mono-font); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; }
+  .next-card h4 { font-family: var(--heading-font); font-size: 14px; font-weight: 700; color: var(--text-bright); line-height: 1.3; margin-bottom: 5px; }
+  .next-card p { font-size: 13px; color: var(--text-muted); margin: 0; line-height: 1.5; font-family: var(--body-font); font-style: italic; }
+
+  /* DARK FOOTER */
+  .footer-dark { border-top: 1px solid var(--border); padding: 28px 40px; }
+  .footer-dark .footer-inner { max-width: 760px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; }
+  .footer-dark .footer-logo-dark { font-family: var(--heading-font); font-size: 15px; font-weight: 800; color: var(--text-bright); letter-spacing: -0.03em; text-decoration: none; display: flex; align-items: center; gap: 6px; }
+  .footer-dark .footer-logo-dark .dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; }
+  .footer-dark span { font-family: var(--mono-font); font-size: 12px; color: var(--text-muted); }
+
+  /* SECTION LANDING (dark) */
+  .section-landing { max-width: 1080px; margin: 0 auto; padding: 72px 40px 100px; }
+  .section-label { font-family: var(--mono-font); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; }
+  .section-landing h1 { font-family: var(--heading-font); font-size: clamp(28px, 4vw, 44px); font-weight: 800; color: var(--text-bright); letter-spacing: -0.03em; margin-bottom: 14px; }
+  .section-landing h1 em { color: var(--accent); font-style: normal; }
+  .section-landing > p { font-size: 17px; color: var(--text-muted); font-style: italic; max-width: 580px; line-height: 1.7; margin-bottom: 56px; font-family: var(--body-font); }
+
+  .articles-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; }
+
+  .article-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px; text-decoration: none; display: flex; flex-direction: column; gap: 12px; transition: border-color 0.2s, background 0.2s; }
+  .article-card:hover { border-color: rgba(0,229,160,0.25); background: var(--surface2); }
+  .article-card .card-tag { font-family: var(--mono-font); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 9px; border-radius: 3px; display: inline-block; width: fit-content; }
+  .article-card h2 { font-family: var(--heading-font); font-size: clamp(16px, 2vw, 20px); font-weight: 700; color: var(--text-bright); letter-spacing: -0.02em; line-height: 1.2; border: none; padding: 0; margin: 0; }
+  .article-card p { font-size: 14px; color: var(--text-muted); line-height: 1.65; font-style: italic; font-family: var(--body-font); margin: 0; flex: 1; }
+  .article-card .card-meta { font-family: var(--mono-font); font-size: 12px; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between; }
+  .article-card:hover .arrow { color: var(--accent); }
+
+  /* Coming soon card */
+  .article-card.coming-soon { opacity: 0.45; pointer-events: none; }
+  .coming-pill { font-family: var(--mono-font); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); border: 1px dashed var(--border); border-radius: 3px; padding: 2px 8px; display: inline-block; width: fit-content; }
+
+  @media (max-width: 640px) {
+    .nav-dark { padding: 0 16px; }
+    .nav-dark .nav-links { display: none; }
+    article { padding: 48px 16px 72px; }
+    .two-col { grid-template-columns: 1fr; }
+    .section-landing { padding: 48px 16px 72px; }
+    .footer-dark { padding: 20px 16px; }
+    .footer-dark .footer-inner { flex-direction: column; gap: 8px; text-align: center; }
+  }
+
+  .diagram-wrap {
+    margin: 40px -1px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 16px 16px;
+    overflow: hidden;
+  }
+
+  .diagram-label {
+    font-family: var(--mono-font);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    text-align: center;
+  }
+
+  .diagram-svg {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Scroll fade-in */
+  .fade-in {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+
+  .fade-in.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .fade-in { opacity: 0; transform: translateY(20px); transition: opacity 0.6s ease, transform 0.6s ease; }
+  .fade-in.visible { opacity: 1; transform: translateY(0); }
+
+  .note-box { border: 1px solid rgba(251,191,36,0.25); background: rgba(251,191,36,0.05);
+    border-radius: 8px; padding: 16px 22px; margin: 24px 0; }
+  .note-box .note-label { font-family: var(--mono-font); font-size: 11px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: #fbbf24; margin-bottom: 8px; }
+  .note-box p { margin: 0; font-size: 15px; color: #fde68a; }
+
+
+  .span-kind-grid {
+    display: grid; grid-template-columns: repeat(5,1fr);
+    gap: 10px; margin: 20px 0 28px;
+  }
+  .span-kind-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px 10px; text-align: center; transition: border-color 0.2s;
+  }
+  .span-kind-card:hover { border-color: rgba(0,229,160,0.3); }
+  .span-kind-card .kind-name { font-family: var(--mono-font); font-size: 12px; font-weight: 600; color: var(--text-bright); margin-bottom: 4px; }
+  .span-kind-card .kind-dir  { font-family: var(--mono-font); font-size: 10px; color: var(--accent); margin-bottom: 5px; }
+  .span-kind-card .kind-desc { font-size: 12px; color: var(--text-muted); line-height: 1.5; font-family: var(--body-font); }
+
+  .prop-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 20px 0 28px; }
+  .prop-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 18px; }
+  .prop-card .prop-name { font-family: var(--mono-font); font-size: 12px; font-weight: 600; color: var(--text-bright); margin-bottom: 5px; }
+  .prop-card .prop-badge { font-family: var(--mono-font); font-size: 10px; padding: 2px 8px; border-radius: 3px; display: inline-block; margin-bottom: 8px; }
+  .badge-standard { background: rgba(0,229,160,0.1); color: var(--accent);  border: 1px solid rgba(0,229,160,0.2); }
+  .badge-legacy   { background: rgba(255,107,53,0.1); color: var(--accent2); border: 1px solid rgba(255,107,53,0.2); }
+  .badge-compat   { background: rgba(129,140,248,0.1); color: var(--indigo); border: 1px solid rgba(129,140,248,0.2); }
+  .prop-card p { font-size: 13px; color: var(--text-muted); margin: 0; line-height: 1.6; font-family: var(--body-font); }
+
+  @media (max-width: 640px) {
+    .span-kind-grid { grid-template-columns: repeat(3,1fr); }
+    .prop-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<nav class="nav-dark">
+  <a href="../index.html" class="nav-logo"><span class="dot"></span>LearnObservability</a>
+  <ul class="nav-links">
+    <li><a href="../opentelemetry/index.html">OpenTelemetry</a></li>
+    <li><a href="../prometheus/index.html">Prometheus</a></li>
+    <li><a href="../kubernetes/index.html">Kubernetes</a></li>
+    <li><a href="../elastic/index.html">Elastic</a></li>
+  </ul>
+</nav>
+
+<header class="hero">
+  <div class="hero-tags">
+    <span class="tag tag-orange">Deep Dive</span>
+    <span class="tag tag-green">Traces</span>
+    <span class="tag tag-muted">15 min read</span>
+  </div>
+  <h1>Distributed Tracing<br>with <em>OpenTelemetry</em></h1>
+  <p class="subtitle">When a request touches six services and something breaks, where do you start? Distributed tracing answers that question. Here's how it works — from spans and context all the way to propagation across service boundaries.</p>
+  <div class="hero-meta">Thejasekhar Reddy.G &nbsp;·&nbsp; April 5, 2026</div>
+</header>
+
+<article>
+
+  <!-- ── 1. WHAT IS A DISTRIBUTED TRACE ─────────────────────────────── -->
+  <h2 class="fade-in"><span class="eyebrow">01 — Foundations</span>What is a Distributed Trace?</h2>
+
+  <p>A <strong>distributed trace</strong> shows the full journey of a request across all your services and systems. It gives you end-to-end visibility — the complete picture of what happened, in which service, in what order, and how long each step took.</p>
+
+  <p>The fundamental unit of a trace is a <strong>span</strong>. A span represents a single, named unit of work — one HTTP call, one database query, one function execution. Every span in a trace shares the same TraceId. That shared ID is what links them all together into one complete picture.</p>
+
+  <div class="pullquote fade-in">
+    <p>"Think of a trace as a tree of spans — the root span starts the request, and every downstream call creates a child span hanging off it."</p>
+  </div>
+
+  
+<div class="diagram-wrap" aria-hidden="true">
+  <div class="diagram-label">Distributed Trace — Request flowing across services as a waterfall of spans</div>
+  <svg viewBox="0 0 700 230"   xmlns="http://www.w3.org/2000/svg" class="diagram-svg">
+    <defs>
+      <filter id="wf"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    </defs>
+
+    <text x="10" y="16" fill="#6b7a8d" font-size="9" font-family="IBM Plex Mono">TraceId: a3f4b2c1... (128-bit · shared across every span in this trace)</text>
+
+    <rect x="10" y="24" width="670" height="26" rx="5" fill="#0f1318" stroke="#10b981" stroke-width="1.5"/>
+    <text x="18" y="41" fill="#10b981" font-size="10" font-family="IBM Plex Mono">frontend · /checkout · SERVER · SpanId: a1b2 · ParentId: null (root)</text>
+    <rect x="10" y="24" width="0" height="26" rx="5" fill="#10b981" opacity="0.12">
+      <animate attributeName="width" from="0" to="670" dur="0.9s" fill="freeze" begin="0.2s"/>
+    </rect>
+
+    <rect x="10" y="58" width="450" height="26" rx="5" fill="#0f1318" stroke="#818cf8" stroke-width="1.3"/>
+    <text x="18" y="75" fill="#818cf8" font-size="10" font-family="IBM Plex Mono">api-gateway · /order · SERVER · SpanId: b3c4 · ParentId: a1b2</text>
+    <rect x="10" y="58" width="0" height="26" rx="5" fill="#818cf8" opacity="0.1">
+      <animate attributeName="width" from="0" to="450" dur="0.7s" fill="freeze" begin="0.5s"/>
+    </rect>
+
+    <rect x="490" y="58" width="180" height="26" rx="5" fill="#0f1318" stroke="#0ea5e9" stroke-width="1.3" stroke-dasharray="5,3"/>
+    <text x="498" y="75" fill="#0ea5e9" font-size="10" font-family="IBM Plex Mono">email-svc · CONSUMER</text>
+    <rect x="490" y="58" width="0" height="26" rx="5" fill="#0ea5e9" opacity="0.08">
+      <animate attributeName="width" from="0" to="180" dur="0.5s" fill="freeze" begin="1.1s"/>
+    </rect>
+
+    <path d="M460,71 Q475,100 490,71" stroke="#0ea5e9" stroke-width="1.2" stroke-dasharray="3,2" fill="none" opacity="0.6"/>
+
+    <rect x="24" y="92" width="320" height="26" rx="5" fill="#0f1318" stroke="#f97316" stroke-width="1.3"/>
+    <text x="32" y="109" fill="#f97316" font-size="10" font-family="IBM Plex Mono">order-svc · db.query · INTERNAL</text>
+    <rect x="24" y="92" width="0" height="26" rx="5" fill="#f97316" opacity="0.1">
+      <animate attributeName="width" from="0" to="320" dur="0.5s" fill="freeze" begin="0.8s"/>
+    </rect>
+
+    <rect x="360" y="92" width="150" height="26" rx="5" fill="#0f1318" stroke="#fbbf24" stroke-width="1.3"/>
+    <text x="368" y="109" fill="#fbbf24" font-size="10" font-family="IBM Plex Mono">kafka · PRODUCER</text>
+    <rect x="360" y="92" width="0" height="26" rx="5" fill="#fbbf24" opacity="0.1">
+      <animate attributeName="width" from="0" to="150" dur="0.4s" fill="freeze" begin="0.95s"/>
+    </rect>
+
+    <circle cx="235" cy="105" r="4" fill="#10b981" opacity="0">
+      <animate attributeName="opacity" from="0" to="1" dur="0.3s" fill="freeze" begin="1.2s"/>
+    </circle>
+    <text x="245" y="108" fill="#10b981" font-size="8" font-family="IBM Plex Mono" opacity="0">
+      <animate attributeName="opacity" from="0" to="1" dur="0.3s" fill="freeze" begin="1.2s"/>
+      event: retry
+    </text>
+
+    <circle cx="670" cy="37" r="5" fill="#10b981" filter="url(#wf)"/>
+    <circle cx="450" cy="71" r="5" fill="#10b981" filter="url(#wf)"/>
+    <circle cx="660" cy="71" r="5" fill="#10b981" filter="url(#wf)"/>
+    <circle cx="334" cy="105" r="5" fill="#10b981" filter="url(#wf)"/>
+    <circle cx="499" cy="105" r="5" fill="#f97316" filter="url(#wf)"/>
+    
+    <line x1="10" y1="158" x2="740" y2="158" stroke="#1e2530" stroke-width="1"/>
+    <text x="10"  y="172" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono">t=0ms</text>
+    <text x="180" y="172" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono">t=50ms</text>
+    <text x="350" y="172" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono">t=100ms</text>
+    <text x="520" y="172" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono">t=150ms</text>
+    <text x="669" y="172" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono">t=200..</text>
+
+    <circle cx="15"  cy="195" r="5" fill="#10b981"/>
+    <text x="23"  y="199" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono">OK</text>
+    <circle cx="55"  cy="195" r="5" fill="#f97316"/>
+    <text x="63"  y="199" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono">ERROR</text>
+    <rect x="105" y="191" width="20" height="8" rx="2" fill="none" stroke="#0ea5e9" stroke-dasharray="4,2" stroke-width="1.2"/>
+    <text x="130" y="199" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono">async / span link</text>
+    <circle cx="220" cy="195" r="4" fill="#10b981"/>
+    <text x="228" y="199" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono">span event</text>
+    <text x="10"  y="215" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono">duration = end_time − start_time · nanosecond accuracy · epoch time</text>  
+  </svg>
+</div>
+
+  <p>The root span has no parent — its ParentSpanId is null. Every other span points back to its parent. This parent-child relationship is how your backend reconstructs the waterfall view you see in tools like Jaeger or Tempo.</p>
+
+  <!-- ── 2. SPAN ANATOMY ─────────────────────────────────────────────── -->
+  <h2 class="fade-in"><span class="eyebrow">02 — Inside a Span</span>What Every Span Carries</h2>
+
+  <p>A span is more than just a name and a duration. It carries a rich set of fields that together tell the full story of one operation.</p>
+
+
+<div class="diagram-wrap" aria-hidden="true">
+  <div class="diagram-label">Inside a Span — every field and what it carries</div>
+  <svg viewBox="0 0 600 370" xmlns="http://www.w3.org/2000/svg" class="diagram-svg">
+    <defs>
+      <filter id="sag"><feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    </defs>
+ 
+    <!-- Outer span box -->
+    <rect x="10" y="10" width="578" height="348" rx="10" fill="#0f1318" stroke="#10b981" stroke-width="1.8"/>
+    <rect x="10" y="10" width="55" height="20" rx="4" fill="#10b981"/>
+    <text x="17" y="24" fill="#000" font-size="10" font-family="IBM Plex Mono" font-weight="600">Span</text>
+ 
+    <!-- ROW 1: Name · Kind · Status · Timestamps -->
+    <rect x="24" y="38" width="118" height="36" rx="6" fill="#0a0c10" stroke="#10b981" stroke-width="1.2"/>
+    <text x="83" y="53" fill="#10b981" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Name</text>
+    <text x="83" y="67" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">GET /checkout</text>
+ 
+    <rect x="152" y="38" width="100" height="36" rx="6" fill="#0a0c10" stroke="#818cf8" stroke-width="1.2"/>
+    <text x="202" y="53" fill="#818cf8" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Kind</text>
+    <text x="202" y="67" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">SERVER</text>
+ 
+    <rect x="262" y="38" width="128" height="36" rx="6" fill="#0a0c10" stroke="#fbbf24" stroke-width="1.2"/>
+    <text x="326" y="53" fill="#fbbf24" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Status</text>
+    <text x="326" y="67" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">OK · ERROR · UNSET</text>
+ 
+    <rect x="400" y="38" width="174" height="36" rx="6" fill="#0a0c10" stroke="#f97316" stroke-width="1.2"/>
+    <text x="487" y="53" fill="#f97316" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Timestamps</text>
+    <text x="487" y="67" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">start · end · nanosecond</text>
+ 
+    <!-- ROW 2: ParentSpanId on the SPAN (not SpanContext) -->
+    <rect x="24" y="84" width="550" height="36" rx="6" fill="#0a0c10" stroke="#f97316" stroke-width="1.2"/>
+    <text x="34" y="99" fill="#f97316" font-size="9" font-family="IBM Plex Mono">ParentSpanId</text>
+    <text x="34" y="112" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono">null if root span · otherwise holds the SpanId of the parent span · lives on the Span itself, NOT inside SpanContext</text>
+ 
+    <!-- ROW 3: SpanContext section -->
+    <rect x="24" y="130" width="550" height="85" rx="7" fill="#0a0c10" stroke="#818cf8" stroke-width="1.2"/>
+    <text x="34" y="146" fill="#818cf8" font-size="9" font-family="IBM Plex Mono">SpanContext  (immutable)</text>
+ 
+    <!-- SpanContext box (nested) -->
+    <text x="34" y="166" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono">TraceId: a3f4b2c1...  ·  SpanId: a1b2c3d4  ·  ParentSpanId: null (root)  ·  TraceFlags: 01</text>
+    <text x="34" y="180" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono">TraceState: vendor=xis_Remote: bool (True if propagated from a remote parent.)</text>
+    <text x="34" y="194" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono">Serialized and injected into outgoing request headers. Extracted on the receiving end to continue the trace.</text>
+ 
+    <!-- ROW 4: Attributes · Events · Links -->
+    <rect x="24" y="234" width="175" height="110" rx="6" fill="#0a0c10" stroke="#10b981" stroke-width="1.2"/>
+    <text x="111" y="250" fill="#10b981" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Attributes</text>
+    <text x="34" y="265" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono">http.method: POST</text>
+    <text x="34" y="278" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono">http.status_code: 200</text>
+    <text x="34" y="291" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono">user.id: u-1234</text>
+    <text x="34" y="304" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono">order.value: 49.99</text>
+    <text x="34" y="317" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono">db.system: postgresql</text>
+    <text x="34" y="338" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono">semantic + custom key-value</text>
+ 
+    <rect x="209" y="234" width="185" height="110" rx="6" fill="#0a0c10" stroke="#fbbf24" stroke-width="1.2"/>
+    <text x="301" y="250" fill="#fbbf24" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Events</text>
+    <text x="219" y="265" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono">payment.initiated  t=10ms</text>
+    <text x="219" y="278" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono">payment.authorized t=45ms</text>
+    <text x="219" y="291" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono">exception          t=80ms</text>
+    <text x="219" y="310" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono">timestamped points in time</text>
+    <text x="219" y="321" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono">no start/end of their own</text>
+    <text x="219" y="332" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono">exceptions MUST be events</text>
+ 
+    <rect x="404" y="234" width="170" height="110" rx="6" fill="#0a0c10" stroke="#0ea5e9" stroke-width="1.2"/>
+    <text x="489" y="250" fill="#0ea5e9" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Links</text>
+    <text x="414" y="265" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono">SpanContext of related span</text>
+    <text x="414" y="278" fill="#6b7a8d" font-size="7.5" font-family="IBM Plex Mono">can cross trace boundaries</text>
+    <text x="414" y="299" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono">used for async / Kafka consumer</text>
+    <text x="414" y="310" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono">not parent-child — contextual</text>
+    <text x="414" y="321" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono">scatter/gather patterns</text>
+  </svg>
+</div>
+
+
+  <div class="feat-list fade-in">
+    <div class="feat-item">
+      <div class="feat-icon">🏷️</div>
+      <div class="feat-body">
+        <div class="label">Name</div>
+        <div class="desc">A meaningful description of the operation. The convention is <code>{verb} {object}</code> — for example <code>GET /users</code>, <code>db.query orders</code>, or <code>send email</code>. This is what you'll see in your tracing backend — make it descriptive.</div>
+      </div>
+    </div>
+    <div class="feat-item">
+      <div class="feat-icon">🔑</div>
+      <div class="feat-body">
+        <div class="label">SpanId</div>
+        <div class="desc">Unique within a trace. 8 bytes (64 bits). Forms the parent-child relationship — every non-root span has a Parent SpanId pointing to its parent.</div>
+      </div>
+    </div>
+    <div class="feat-item">
+      <div class="feat-icon">👨‍👧</div>
+      <div class="feat-body">
+        <div class="label">Parent SpanId</div>
+        <div class="desc">Null if this is the root span. Otherwise, points to the parent span's ID — this is how the Collector and backends reconstruct the relationship between spans into a tree.</div>
+      </div>
+    </div>
+    <div class="feat-item">
+      <div class="feat-icon">⏱️</div>
+      <div class="feat-body">
+        <div class="label">Start and End Timestamps</div>
+        <div class="desc">Recorded with nanosecond accuracy in epoch time. Duration is <code>end_time − start_time</code>. Parent spans usually wrap their children — the parent's duration covers the time of all its child spans combined.</div>
+      </div>
+    </div>
+    <div class="feat-item">
+      <div class="feat-icon">📦</div>
+      <div class="feat-body">
+        <div class="label">SpanContext (metadata)</div>
+        <div class="desc">An immutable object containing the TraceId, SpanId, TraceFlags, and TraceState. SpanContext is the serialized part sent with Distributed Context and Baggage with every outgoing request — it's how trace identity crosses service boundaries. More on this in section 03.</div>
+      </div>
+    </div>
+    <div class="feat-item">
+      <div class="feat-icon">📋</div>
+      <div class="feat-body">
+        <div class="label">Attributes (descriptive details)</div>
+        <div class="desc">Key-value pairs of metadata attached to the span. They give your backend something to filter and search on. Two types: <strong>semantic attributes</strong> (standardized keys like <code>http.method</code> or <code>db.system</code>) and <strong>custom attributes</strong> (your business context — <code>user.id</code>, <code>order.value</code>, <code>tenant.name</code>). Semantic attributes come automatically from instrumentation libraries. Custom ones you add manually.</div>
+      </div>
+    </div>
+    <div class="feat-item">
+      <div class="feat-icon">📌</div>
+      <div class="feat-body">
+        <div class="label">Span Events</div>
+        <div class="desc">Timestamped annotations within a span — they mark a specific moment in time during the span's execution. Events have no start or end of their own, just a timestamp. All exceptions must be recorded as span events. When you call <code>add_event()</code> without a timestamp, the SDK assigns the current time automatically.</div>
+      </div>
+    </div>
+    <div class="feat-item">
+      <div class="feat-icon">🔗</div>
+      <div class="feat-body">
+        <div class="label">Span Links</div>
+        <div class="desc">Relationships between spans that are related but not parent-child. Used in async scenarios — a Kafka consumer starting a new trace can <em>link</em> back to the producer's span, even though they're in completely different traces. Span links can cross trace boundaries.</div>
+      </div>
+    </div>
+    <div class="feat-item">
+      <div class="feat-icon">✅</div>
+      <div class="feat-body">
+        <div class="label">Status</div>
+        <div class="desc"><strong>UNSET</strong> (default) — span completed without any status being set. <strong>OK</strong> — explicitly confirms success. <strong>ERROR</strong> — something went wrong. Set ERROR when an exception occurs so your backend can surface it properly.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 3. SPAN CONTEXT ─────────────────────────────────────────────── -->
+  <h2 class="fade-in"><span class="eyebrow">03 — Span Context</span>The Identity That Travels With Every Request</h2>
+
+  <p>SpanContext is the immutable part of a span that gets serialized and sent across service boundaries. While the rest of a span stays in your backend, SpanContext travels with every outgoing request so the receiving service can continue the same trace.</p>
+
+
+<div class="diagram-wrap" aria-hidden="true">
+  <div class="diagram-label">SpanContext — The Immutable Identity Passed Between Services</div>
+  <svg viewBox="0 0 580 140" xmlns="http://www.w3.org/2000/svg" class="diagram-svg">
+    <defs><filter id="scf"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+
+    <rect x="10" y="10" width="560" height="110" rx="10" fill="#0f1318" stroke="#818cf8" stroke-width="1.8"/>
+    <rect x="10" y="10" width="100" height="22" rx="4" fill="#818cf8"/>
+    <text x="18" y="26" fill="#fff" font-size="11" font-family="IBM Plex Mono" font-weight="600">SpanContext</text>
+    <text x="120" y="26" fill="#6b7a8d" font-size="9" font-family="IBM Plex Mono">Immutable · serialized and sent with every request</text>
+
+    <!-- TraceId -->
+    <rect x="24" y="38" width="120" height="34" rx="6" fill="#0a0c10" stroke="#10b981" stroke-width="1.2"/>
+    <text x="84" y="52" fill="#10b981" font-size="10" font-family="IBM Plex Mono" text-anchor="middle">TraceId</text>
+    <text x="84" y="65" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">16 bytes · 128-bit</text>
+
+    <!-- SpanId -->
+    <rect x="156" y="38" width="120" height="34" rx="6" fill="#0a0c10" stroke="#818cf8" stroke-width="1.2"/>
+    <text x="216" y="52" fill="#818cf8" font-size="10" font-family="IBM Plex Mono" text-anchor="middle">SpanId</text>
+    <text x="216" y="65" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">8 bytes · 64-bit</text>
+
+    <!-- TraceFlags -->
+    <rect x="288" y="38" width="120" height="34" rx="6" fill="#0a0c10" stroke="#fbbf24" stroke-width="1.2"/>
+    <text x="348" y="52" fill="#fbbf24" font-size="10" font-family="IBM Plex Mono" text-anchor="middle">TraceFlags</text>
+    <text x="348" y="65" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">8-bit · mandatory</text>
+
+    <!-- TraceState -->
+    <rect x="420" y="38" width="136" height="34" rx="6" fill="#0a0c10" stroke="#f97316" stroke-width="1.2"/>
+    <text x="488" y="52" fill="#f97316" font-size="10" font-family="IBM Plex Mono" text-anchor="middle">TraceState</text>
+    <text x="488" y="65" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">optional · max 256 chars</text>
+
+    <!-- Notes row -->
+    <text x="84" y="96" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">unique per trace</text>
+    <text x="216" y="96" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">unique within trace</text>
+    <text x="348" y="90" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">00=not sampled</text>
+    <text x="348" y="101" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">01=sampled</text>
+    <text x="488" y="90" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">vendor metadata</text>
+    <text x="488" y="101" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">ot:=&lt;value&gt;</text>
+
+    <!-- Animated packet flowing through -->
+    <circle r="4" fill="#818cf8" filter="url(#scf)" opacity="0.9">
+      <animateMotion dur="3s" repeatCount="indefinite" begin="0s" path="M10,75 L570,75"/>
+    </circle>
+  </svg>
+</div>
+
+
+  <div class="feat-list fade-in">
+    <div class="feat-item">
+      <div class="feat-icon">🆔</div>
+      <div class="feat-body">
+        <div class="label">TraceId — 16 bytes · 128-bit</div>
+        <div class="desc">Unique per trace. Represented as a 32-character hex string. Every single span in a trace shares this same TraceId — it's the thread that connects them all.</div>
+      </div>
+    </div>
+    <div class="feat-item">
+      <div class="feat-icon">🔢</div>
+      <div class="feat-body">
+        <div class="label">SpanId — 8 bytes · 64-bit</div>
+        <div class="desc">Unique within the trace. Combined with ParentSpanId, this forms the parent-child tree that your backend uses to render the waterfall view.</div>
+      </div>
+    </div>
+    <div class="feat-item">
+      <div class="feat-icon">🚩</div>
+      <div class="feat-body">
+        <div class="label">TraceFlags — 8-bit · mandatory</div>
+        <div class="desc">Always present in every request. Controls sampling — <code>00</code> means not sampled, <code>01</code> means sampled. Unlike TraceState, this field is never optional.</div>
+      </div>
+    </div>
+    <div class="feat-item">
+      <div class="feat-icon">🏪</div>
+      <div class="feat-body">
+        <div class="label">TraceState — optional · max 256 chars</div>
+        <div class="desc">Carries vendor-specific metadata alongside the trace. Key-value pairs using the <code>ot:=value</code> reserved prefix. Useful for passing vendor flags or configuration between systems.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 4. SPAN KIND ────────────────────────────────────────────────── -->
+  <h2 class="fade-in"><span class="eyebrow">04 — Span Kind</span>Classifying the Role of Each Span</h2>
+
+  <p>Span Kind classifies what role a span plays in the distributed system. It tells your backend and instrumentation libraries whether a span is initiating a request or responding to one — which matters for dependency mapping and latency attribution.</p>
+
+  <div class="span-kind-grid fade-in">
+    <div class="span-kind-card">
+      <div class="kind-name">CLIENT</div>
+      <div class="kind-dir">outgoing →</div>
+      <div class="kind-desc">Outgoing HTTP calls, DB queries. The span making the request.</div>
+    </div>
+    <div class="span-kind-card">
+      <div class="kind-name">SERVER</div>
+      <div class="kind-dir">← incoming</div>
+      <div class="kind-desc">Incoming HTTP requests. The span receiving and handling the request.</div>
+    </div>
+    <div class="span-kind-card">
+      <div class="kind-name">PRODUCER</div>
+      <div class="kind-dir">outgoing →</div>
+      <div class="kind-desc">Publishing a message to a queue or topic. Deferred execution.</div>
+    </div>
+    <div class="span-kind-card">
+      <div class="kind-name">CONSUMER</div>
+      <div class="kind-dir">← incoming</div>
+      <div class="kind-desc">Consuming async messages from a queue. Often uses Span Links.</div>
+    </div>
+    <div class="span-kind-card">
+      <div class="kind-name">INTERNAL</div>
+      <div class="kind-dir">local ↔</div>
+      <div class="kind-desc">Local operations, business logic, transformations. The default.</div>
+    </div>
+  </div>
+
+  <div class="opinion fade-in">
+    <div class="label">HTTP pattern</div>
+    <p>Every outgoing HTTP call from Service A becomes a <strong>CLIENT</strong> span. Every incoming HTTP call received by Service B becomes a <strong>SERVER</strong> span. Together they form the cross-service link in your trace waterfall.</p>
+  </div>
+  <div class="opinion fade-in">
+    <div class="label">HTTP Instrumentation Pattern</div>
+    <p><strong>CLIENT</strong> spans are created for outgoing HTTP requests. <strong>SERVER</strong> spans are created for incoming HTTP requests. PRODUCER/CONSUMER are used for messaging systems like Kafka, SQS. INTERNAL is the default for any local operation — transformations, business logic, internal function calls.</p>
+  </div>
+
+  <!-- ── 5. SPAN ATTRIBUTES ──────────────────────────────────────────── -->
+  <h2 class="fade-in"><span class="eyebrow">05 — Attributes</span>Span Attributes and Semantic Conventions</h2>
+
+  <p>Span attributes are key-value pairs (metadata) that can be added to spans to give more context and additional details. Spans with attributes are helpful for filtering, analysis, and alerts — they let you slice and dice your spans in your backend.</p>
+
+  <div class="two-col fade-in">
+    <div class="grid-card">
+      <h4>Semantic Attributes</h4>
+      <p>Predefined keys that capture common metadata like <code>http.method</code> or <code>db.system</code>. They ensure standardization across systems — technical context is automatically attached by instrumentation libraries.</p>
+    </div>
+    <div class="grid-card">
+      <h4>Custom / Business Attributes</h4>
+      <p>For business context, you need to attach span attributes with manual instrumentation. Example: <code>user.id</code>, <code>order.value</code>, <code>tenant.name</code>. These are not automatic — you add them explicitly.</p>
+    </div>
+  </div>
+
+  <div class="note-box fade-in">
+    <div class="note-label">Parent-Child Timing</div>
+    <p>Parent spans usually wrap around their child spans — a parent's duration covers the time of all its children. When <code>add_event('retry')</code> is called without a timestamp, the SDK automatically assigns the current timestamp.</p>
+  </div>
+
+  <!-- ── 6. RESOURCES ────────────────────────────────────────────────── -->
+  <h2 class="fade-in"><span class="eyebrow">06 — Resources</span>Describing Where Telemetry Comes From</h2>
+
+  <p>A resource is a collection of attributes that identifies the <em>source</em> of telemetry data. Resources are attached during SDK initialization — not per span. Once set, they appear on every span, metric, and log emitted by that provider for the lifetime of the process.</p>
+
+  <div class="feat-list fade-in">
+    <div class="feat-item">
+      <div class="feat-icon">🏷️</div>
+      <div class="feat-body">
+        <div class="label">Default resource attributes</div>
+        <div class="desc">The SDK automatically adds <code>telemetry.sdk.name</code>, <code>telemetry.sdk.language</code>, and <code>telemetry.sdk.version</code>. The default <code>service.name</code> is <code>"unknown_service"</code> — always override this, it's the most important resource attribute you'll set.</div>
+      </div>
+    </div>
+    <div class="feat-item">
+      <div class="feat-icon">🔍</div>
+      <div class="feat-body">
+        <div class="label">Resource Detectors</div>
+        <div class="desc">Plugins that automatically detect your environment — OS, host, process, container, Kubernetes pod name, cloud provider. Configure the relevant detectors once and you get rich context on every span for free.</div>
+      </div>
+    </div>
+    <div class="feat-item">
+      <div class="feat-icon">⚙️</div>
+      <div class="feat-body">
+        <div class="label">Custom attributes via env var</div>
+        <div class="desc">Set <code>OTEL_RESOURCE_ATTRIBUTES</code> and <code>OTEL_SERVICE_NAME</code> in your environment without changing any application code. In Kubernetes, inject them via the Downward API so each pod self-identifies correctly.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 7. BAGGAGE ─────────────────────────────────────────────────── -->
+  <h2 class="fade-in"><span class="eyebrow">07 — Baggage</span>Propagating Business Context Across Services</h2>
+
+  <p>OpenTelemetry Baggage is a way to propagate key-value metadata alongside your trace — across every service boundary. It travels in HTTP request headers so every downstream service in the call chain can read it.</p>
+
+  <div class="two-col fade-in">
+    <div class="grid-card">
+      <h4>What it carries</h4>
+      <p>App-level metadata propagated alongside the trace — e.g. <code>user-id=u2</code>, <code>region=us-east</code>. Baggage is transferred via W3C Baggage standard.</p>
+    </div>
+    <div class="grid-card">
+      <h4>How it moves</h4>
+      <p>Using <code>propagate.inject(headers)</code> to put baggage in headers. Using <code>propagate.extract(headers)</code> to extract key-value pairs from baggage on the receiving end.</p>
+    </div>
+    <div class="grid-card">
+      <h4>⚠️ Security caution</h4>
+      <p>Baggage is sent via headers — no integrity checks. Risk of sensitive data exposure when propagating beyond trusted boundaries. Caution required.</p>
+    </div>
+    <div class="grid-card">
+      <h4>W3C Baggage standard</h4>
+      <p>Baggage is transmitted using the W3C Baggage specification — the same open standard as W3C TraceContext. Both travel together in request headers.</p>
+    </div>
+  </div>
+
+  <!-- ── 8. CONTEXT PROPAGATION ─────────────────────────────────────── -->
+  <h2 class="fade-in"><span class="eyebrow">08 — Context Propagation</span>How a Trace Crosses Service Boundaries</h2>
+
+  <p>Context propagation is the mechanism that turns a collection of individual spans into a connected trace. Without it, each service would start a fresh, unconnected trace — and you'd have no way to reconstruct the full request journey.</p>
+
+  <p>W3C TraceContext defines how trace data moves across services. It is the default standard used by OpenTelemetry.</p>
+
+  
+<div class="diagram-wrap" aria-hidden="true">
+  <div class="diagram-label">Context Propagation — inject → HTTP headers → extract → trace continues</div>
+  <svg viewBox="0 0 620 170" xmlns="http://www.w3.org/2000/svg" class="diagram-svg">
+    <defs>
+      <filter id="cpg"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      <marker id="cpa" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+        <path d="M0,0 L6,3 L0,6 Z" fill="#1e2530"/>
+      </marker>
+    </defs>
+
+    <!-- Service A -->
+    <rect x="10" y="44" width="120" height="72" rx="8" fill="#0f1318" stroke="#10b981" stroke-width="1.5"/>
+    <text x="70" y="70" fill="#10b981" font-size="11" font-family="IBM Plex Mono" text-anchor="middle">Service A</text>
+    <text x="70" y="85" fill="#6b7a8d" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">active span</text>
+    <rect x="18" y="92" width="104" height="16" rx="3" fill="#0a0c10" stroke="#818cf8" stroke-width="1"/>
+    <text x="70" y="104" fill="#818cf8" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">propagator.inject()</text>
+
+    <line x1="130" y1="80" x2="160" y2="80" stroke="#1e2530" stroke-width="1.5" marker-end="url(#cpa)"/>
+
+    <!-- Headers box -->
+    <rect x="160" y="30" width="300" height="100" rx="8" fill="#0f1318" stroke="#fbbf24" stroke-width="1.5"/>
+    <text x="310" y="52" fill="#fbbf24" font-size="10" font-family="IBM Plex Mono" text-anchor="middle">HTTP / gRPC Request Headers</text>
+    <text x="175" y="70" fill="#6b7a8d" font-size="8.5" font-family="IBM Plex Mono">traceparent: 00-a3f4b2c1d0e9...-a1b2c3d4-01</text>
+    <text x="175" y="84" fill="#6b7a8d" font-size="8.5" font-family="IBM Plex Mono">tracestate:  vendor=metadata</text>
+    <text x="175" y="98" fill="#6b7a8d" font-size="8.5" font-family="IBM Plex Mono">baggage:     user-id=u1234, region=us-east</text>
+    <text x="165" y="116" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono">↑ W3C TraceContext format · same across gRPC, HTTP, messaging</text>
+
+    <line x1="460" y1="80" x2="490" y2="80" stroke="#1e2530" stroke-width="1.5" marker-end="url(#cpa)"/>
+
+    <!-- Service B -->
+    <rect x="490" y="44" width="120" height="72" rx="8" fill="#0f1318" stroke="#818cf8" stroke-width="1.5"/>
+    <text x="550" y="70" fill="#818cf8" font-size="11" font-family="IBM Plex Mono" text-anchor="middle">Service B</text>
+    <text x="550" y="85" fill="#6b7a8d" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">child span</text>
+    <rect x="498" y="92" width="104" height="16" rx="3" fill="#0a0c10" stroke="#10b981" stroke-width="1"/>
+    <text x="550" y="104" fill="#10b981" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">propagator.extract()</text>
+
+    <!-- Animated packet -->
+    <circle r="5" fill="#fbbf24" filter="url(#cpg)">
+      <animateMotion dur="2.8s" repeatCount="indefinite" begin="0s" path="M10,80 L610,80"/>
+      <animate attributeName="fill" values="#10b981;#fbbf24;#fbbf24;#818cf8" keyTimes="0;0.22;0.78;1" dur="2.8s" repeatCount="indefinite"/>
+    </circle>
+
+    <!-- Label: same trace -->
+    <text x="310" y="148" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">Service B's span gets the same TraceId · its ParentSpanId = Service A's SpanId</text>
+    <text x="310" y="161" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">The trace does not restart — it continues seamlessly across the boundary</text>
+  </svg>
+</div>
+
+
+  <div class="feat-list fade-in">
+    <div class="feat-item">
+      <div class="feat-icon">📨</div>
+      <div class="feat-body">
+        <div class="label">traceparent header</div>
+        <div class="desc">Carries the core identity: <code>&lt;version&gt;-&lt;traceID&gt;-&lt;spanID&gt;-&lt;flags&gt;</code>. Example: <code>00-a3f4b2c1...-a1b2c3d4-01</code>. The receiving service reads this, extracts the TraceId and parent SpanId, and creates a new child span that continues the same trace.</div>
+      </div>
+    </div>
+    <div class="feat-item">
+      <div class="feat-icon">🏪</div>
+      <div class="feat-body">
+        <div class="label">tracestate header</div>
+        <div class="desc">Optional vendor-specific data traveling alongside the trace. Carries extra tracing information as key-value pairs specific to vendors or systems involved.</div>
+      </div>
+    </div>
+    <div class="feat-item">
+      <div class="feat-icon">🧳</div>
+      <div class="feat-body">
+        <div class="label">baggage header</div>
+        <div class="desc">Application-level metadata like user ID, region, tenant. Example: <code>baggage: user-id=u2, region=us-east</code>. Propagated alongside the trace to every downstream service — not just the next hop.</div>
+      </div>
+    </div>
+  </div>
+
+  <h3 class="fade-in">The Propagator API</h3>
+
+  <div class="two-col fade-in">
+    <div class="grid-card">
+      <h4>TextMapPropagator</h4>
+      <p>The core interface for reading and writing context into carriers like HTTP headers. Compatible with HTTP, gRPC, and custom messaging protocols.</p>
+    </div>
+    <div class="grid-card">
+      <h4>Carrier</h4>
+      <p>The medium transporting the context — HTTP headers, message headers, gRPC metadata. The carrier holds the serialized context during transit.</p>
+    </div>
+    <div class="grid-card">
+      <h4>Setter / Getter functions</h4>
+      <p>Functions that know how to write data into the carrier and read it back out. They abstract the specific format of the carrier.</p>
+    </div>
+    <div class="grid-card">
+      <h4>Inject</h4>
+      <p>Called on the outbound side. Writes the current trace context into the outgoing carrier before the request leaves the service.</p>
+    </div>
+    <div class="grid-card">
+      <h4>Extract</h4>
+      <p>Called on the inbound side. Reads context from the incoming carrier so the trace continues — not starts fresh — on the receiving end.</p>
+    </div>
+  </div>
+
+  <!-- ── 9. PROPAGATION FORMATS ──────────────────────────────────────── -->
+  <h2 class="fade-in"><span class="eyebrow">09 — Propagation Formats</span>Which Format to Use and When</h2>
+
+  <p>The propagation format defines the exact header names and encoding used to carry the SpanContext. OpenTelemetry supports several formats for compatibility with different ecosystems.</p>
+
+  <div class="prop-grid fade-in">
+    <div class="prop-card">
+      <div class="prop-name">W3C TraceContext</div>
+      <span class="prop-badge badge-standard">Use This</span>
+      <p>The official open standard. Headers: <code>traceparent</code> and <code>tracestate</code>. Vendor-neutral and the default in OpenTelemetry. If you're starting fresh, always use this.</p>
+    </div>
+    <div class="prop-card">
+      <div class="prop-name">W3C Baggage</div>
+      <span class="prop-badge badge-standard">Use This</span>
+      <p>Companion to W3C TraceContext. Carries arbitrary key-value application metadata alongside the trace. Both W3C formats travel together.</p>
+    </div>
+    <div class="prop-card">
+      <div class="prop-name">B3 (Zipkin)</div>
+      <span class="prop-badge badge-compat">Compatibility</span>
+      <p>Originally from Zipkin, still widely used. Headers: <code>X-B3-TraceId</code>, <code>X-B3-SpanId</code>, <code>X-B3-Sampled</code>. Use when integrating with legacy Zipkin-based systems.</p>
+    </div>
+    <div class="prop-card">
+      <div class="prop-name">Jaeger</div>
+      <span class="prop-badge badge-legacy">Legacy</span>
+      <p>Jaeger's own propagation format. Useful when migrating from OpenTracing-based Jaeger setups to OpenTelemetry.</p>
+    </div>
+    <div class="prop-card">
+      <div class="prop-name">OT Trace</div>
+      <span class="prop-badge badge-legacy">Legacy</span>
+      <p>The legacy OpenTracing format. Used when migrating from OpenTracing to OpenTelemetry — keeps traces connected during the transition period.</p>
+    </div>
+    <div class="prop-card">
+      <div class="prop-name">OpenCensus Binary</div>
+      <span class="prop-badge badge-legacy">Legacy</span>
+      <p>Binary metadata format used in gRPC-native OpenCensus setups. Use only when integrating with systems still running OpenCensus.</p>
+    </div>
+  </div>
+
+  <div class="info-card fade-in">
+    <div class="card-label">Composite Propagators</div>
+    <h3>Using multiple formats at the same time</h3>
+    <p>A Composite Propagator lets OpenTelemetry inject and extract context using multiple formats simultaneously. For example — using both W3C TraceContext and B3 together ensures every downstream service can continue the trace regardless of which format it understands. This is the right approach when migrating mixed environments.</p>
+  </div>
+
+  <div class="next-reads fade-in">
+    <div class="next-reads-label">Continue Reading</div>
+    <div class="next-reads-grid">
+
+      <a href="otel-collector.html" class="next-card">
+        <div class="next-tag">Deep Dive</div>
+        <h4>The OTel Collector Guide</h4>
+        <p>Receivers, processors, exporters — and the hard lessons from running it in production at scale.</p>
+      </a>
+
+      <a href="otel-instrumentation-sdk.html" class="next-card">
+        <div class="next-tag">Part 1</div>
+        <h4>SDK and Tracing API</h4>
+        <p>TracerProvider, SpanProcessor, exporters and sampling.</p>
+      </a>
+      
+    </div>
+  </div>
+
+</article>
+
+<footer class="footer-dark">
+  <div class="footer-inner">
+    <a href="../index.html" class="footer-logo-dark"><span class="dot"></span>LearnObservability</a>
+    <span>© 2026 · Written by Thejasekhar Reddy.G</span>
+  </div>
+</footer>
+
+<script>
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach((e, i) => {
+    if (e.isIntersecting) {
+      setTimeout(() => e.target.classList.add('visible'), i * 80);
+      observer.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.12 });
+
+document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+</script>
+
+</body>
+</html>
