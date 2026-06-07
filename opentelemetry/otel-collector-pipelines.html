@@ -1,0 +1,1205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Building Telemetry Pipelines with OTel Collector · LearnObservability</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c10;
+    --surface: #0f1318;
+    --surface2: #151a22;
+    --border: #1e2530;
+    --accent: #00e5a0;
+    --accent2: #ff6b35;
+    --indigo: #818cf8;
+    --text: #d4dce8;
+    --text-muted: #6b7a8d;
+    --text-bright: #f0f4f8;
+    --heading-font: 'Syne', sans-serif;
+    --body-font: 'Lora', serif;
+    --mono-font: 'IBM Plex Mono', monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--body-font);
+    line-height: 1.8;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* NAV DARK */
+  .nav-dark {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 40px; height: 60px;
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0;
+    background: rgba(10,12,16,0.95);
+    backdrop-filter: blur(10px); z-index: 100;
+  }
+
+  .nav-dark .nav-logo {
+    font-family: var(--heading-font); font-size: 16px; font-weight: 800;
+    color: var(--text-bright); letter-spacing: -0.03em;
+    text-decoration: none; display: flex; align-items: center; gap: 8px;
+  }
+
+  .nav-dark .dot { width: 7px; height: 7px; background: var(--accent); border-radius: 50%; }
+
+  .nav-dark .nav-links { display: flex; align-items: center; gap: 24px; list-style: none; }
+
+  .nav-dark .nav-links a {
+    font-family: var(--heading-font); font-size: 13px; font-weight: 600;
+    color: var(--text-muted); text-decoration: none;
+    letter-spacing: 0.02em; transition: color 0.15s;
+  }
+
+  .nav-dark .nav-links a:hover { color: var(--text-bright); }
+
+  /* HERO */
+  .hero {
+    position: relative; padding: 88px 24px 72px;
+    text-align: center; border-bottom: 1px solid var(--border); overflow: hidden;
+  }
+
+  .hero::before {
+    content: ''; position: absolute; top: -80px; left: 50%;
+    transform: translateX(-50%); width: 700px; height: 400px;
+    background: radial-gradient(ellipse at center, rgba(0,229,160,0.07) 0%, transparent 65%);
+    pointer-events: none;
+  }
+
+  .hero-tags { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 26px; flex-wrap: wrap; }
+
+  .tag { display: inline-block; font-family: var(--mono-font); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; padding: 4px 11px; border-radius: 3px; }
+  .tag-green  { color: var(--accent);  border: 1px solid rgba(0,229,160,0.3);   background: rgba(0,229,160,0.05); }
+  .tag-indigo { color: var(--indigo);  border: 1px solid rgba(129,140,248,0.3); background: rgba(129,140,248,0.05); }
+  .tag-orange { color: var(--accent2); border: 1px solid rgba(255,107,53,0.3);  background: rgba(255,107,53,0.05); }
+  .tag-muted  { color: var(--text-muted); border: 1px solid var(--border); }
+
+  .hero h1 {
+    font-family: var(--heading-font); font-size: clamp(30px, 5vw, 52px);
+    font-weight: 800; color: var(--text-bright); line-height: 1.08;
+    max-width: 820px; margin: 0 auto 20px; letter-spacing: -0.03em;
+  }
+
+  .hero h1 em { color: var(--accent); font-style: normal; }
+  .hero .subtitle { font-family: var(--body-font); font-style: italic; color: var(--text-muted); font-size: 17px; max-width: 560px; margin: 0 auto 28px; line-height: 1.7; }
+  .hero-meta { font-family: var(--mono-font); font-size: 12px; color: var(--text-muted); letter-spacing: 0.05em; }
+
+  /* ARTICLE */
+  article { max-width: 1080px; margin: 0 auto; padding: 72px 24px 100px; }
+
+  h2 {
+    font-family: var(--heading-font); font-size: clamp(20px, 3vw, 27px);
+    font-weight: 700; color: var(--text-bright); margin: 68px 0 16px;
+    letter-spacing: -0.02em; padding-top: 32px; border-top: 1px solid var(--border);
+  }
+
+  h2:first-child { margin-top: 0; }
+
+  h2 .eyebrow {
+    display: block; font-family: var(--mono-font); font-size: 11px; font-weight: 400;
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px;
+  }
+
+  h2 .eyebrow-indigo { color: var(--indigo); }
+  h2 .eyebrow-orange { color: var(--accent2); }
+
+  h3 { font-family: var(--heading-font); font-size: 17px; font-weight: 700; color: var(--text-bright); margin: 40px 0 10px; }
+
+  p { margin-bottom: 20px; color: var(--text); font-size: 17px; }
+  p strong { color: var(--text-bright); font-weight: 600; font-family: var(--heading-font); }
+  p em { font-style: italic; }
+
+  code { font-family: var(--mono-font); font-size: 13px; background: var(--surface2); border: 1px solid var(--border); padding: 1px 7px; border-radius: 4px; color: var(--indigo); }
+
+  a { color: var(--accent); }
+
+  .pullquote { border-left: 3px solid var(--accent); background: rgba(0,229,160,0.04); border-radius: 0 6px 6px 0; padding: 20px 28px; margin: 32px 0; }
+  .pullquote p { font-style: italic; font-size: 19px; color: var(--text-bright); margin: 0; line-height: 1.65; }
+
+  .opinion { border: 1px solid rgba(129,140,248,0.25); background: rgba(129,140,248,0.04); border-radius: 8px; padding: 20px 24px; margin: 32px 0; }
+  .opinion .label { font-family: var(--mono-font); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--indigo); margin-bottom: 8px; }
+  .opinion p { margin: 0; font-size: 16px; color: #c7d2fe; font-style: italic; }
+
+  .info-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 28px; margin: 28px 0; }
+  .info-card .card-label { font-family: var(--mono-font); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; }
+  .info-card h3 { margin: 0 0 8px; font-size: 17px; }
+  .info-card p { margin: 0; font-size: 15px; color: var(--text-muted); }
+
+  .feat-list { display: flex; flex-direction: column; gap: 12px; margin: 20px 0 28px; }
+  .feat-item { display: flex; align-items: flex-start; gap: 14px; padding: 16px 18px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+  .feat-item:hover { border-color: rgba(0,229,160,0.2); }
+  .feat-icon { font-size: 18px; flex-shrink: 0; margin-top: 2px; }
+  .feat-body .label { font-family: var(--heading-font); font-size: 15px; font-weight: 700; color: var(--text-bright); margin-bottom: 3px; }
+  .feat-body .desc { font-size: 14px; color: var(--text-muted); line-height: 1.6; font-family: var(--body-font); }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0 28px; }
+  .grid-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; }
+  .grid-card h4 { font-family: var(--heading-font); font-size: 14px; font-weight: 700; color: var(--text-bright); margin-bottom: 6px; }
+  .grid-card p { font-size: 14px; color: var(--text-muted); margin: 0; line-height: 1.6; font-family: var(--body-font); }
+
+  hr.divider { border: none; border-top: 1px solid var(--border); margin: 0; }
+
+  /* NEXT READS */
+  .next-reads { margin-top: 72px; padding-top: 36px; border-top: 1px solid var(--border); }
+  .next-reads-label { font-family: var(--mono-font); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 16px; }
+  .next-reads-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+
+  .next-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 18px 20px; text-decoration: none; display: block; transition: border-color 0.2s; }
+  .next-card:hover { border-color: rgba(0,229,160,0.25); }
+  .next-card .next-tag { font-family: var(--mono-font); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; }
+  .next-card h4 { font-family: var(--heading-font); font-size: 14px; font-weight: 700; color: var(--text-bright); line-height: 1.3; margin-bottom: 5px; }
+  .next-card p { font-size: 13px; color: var(--text-muted); margin: 0; line-height: 1.5; font-family: var(--body-font); font-style: italic; }
+
+  /* DARK FOOTER */
+  .footer-dark { border-top: 1px solid var(--border); padding: 28px 40px; }
+  .footer-dark .footer-inner { max-width: 760px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; }
+  .footer-dark .footer-logo-dark { font-family: var(--heading-font); font-size: 15px; font-weight: 800; color: var(--text-bright); letter-spacing: -0.03em; text-decoration: none; display: flex; align-items: center; gap: 6px; }
+  .footer-dark .footer-logo-dark .dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; }
+  .footer-dark span { font-family: var(--mono-font); font-size: 12px; color: var(--text-muted); }
+
+  /* SECTION LANDING (dark) */
+  .section-landing { max-width: 1080px; margin: 0 auto; padding: 72px 40px 100px; }
+  .section-label { font-family: var(--mono-font); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; }
+  .section-landing h1 { font-family: var(--heading-font); font-size: clamp(28px, 4vw, 44px); font-weight: 800; color: var(--text-bright); letter-spacing: -0.03em; margin-bottom: 14px; }
+  .section-landing h1 em { color: var(--accent); font-style: normal; }
+  .section-landing > p { font-size: 17px; color: var(--text-muted); font-style: italic; max-width: 580px; line-height: 1.7; margin-bottom: 56px; font-family: var(--body-font); }
+
+  .articles-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; }
+
+  .article-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px; text-decoration: none; display: flex; flex-direction: column; gap: 12px; transition: border-color 0.2s, background 0.2s; }
+  .article-card:hover { border-color: rgba(0,229,160,0.25); background: var(--surface2); }
+  .article-card .card-tag { font-family: var(--mono-font); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 9px; border-radius: 3px; display: inline-block; width: fit-content; }
+  .article-card h2 { font-family: var(--heading-font); font-size: clamp(16px, 2vw, 20px); font-weight: 700; color: var(--text-bright); letter-spacing: -0.02em; line-height: 1.2; border: none; padding: 0; margin: 0; }
+  .article-card p { font-size: 14px; color: var(--text-muted); line-height: 1.65; font-style: italic; font-family: var(--body-font); margin: 0; flex: 1; }
+  .article-card .card-meta { font-family: var(--mono-font); font-size: 12px; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between; }
+  .article-card:hover .arrow { color: var(--accent); }
+
+  /* Coming soon card */
+  .article-card.coming-soon { opacity: 0.45; pointer-events: none; }
+  .coming-pill { font-family: var(--mono-font); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); border: 1px dashed var(--border); border-radius: 3px; padding: 2px 8px; display: inline-block; width: fit-content; }
+
+  @media (max-width: 640px) {
+    .nav-dark { padding: 0 16px; }
+    .nav-dark .nav-links { display: none; }
+    article { padding: 48px 16px 72px; }
+    .two-col { grid-template-columns: 1fr; }
+    .section-landing { padding: 48px 16px 72px; }
+    .footer-dark { padding: 20px 16px; }
+    .footer-dark .footer-inner { flex-direction: column; gap: 8px; text-align: center; }
+  }
+
+  .diagram-wrap {
+    margin: 40px -1px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 16px 16px;
+    overflow: hidden;
+  }
+
+  .diagram-label {
+    font-family: var(--mono-font);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    text-align: center;
+  }
+
+  .diagram-svg {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Scroll fade-in */
+  .fade-in {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+
+  .fade-in.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .fade-in { opacity: 0; transform: translateY(20px); transition: opacity 0.6s ease, transform 0.6s ease; }
+  .fade-in.visible { opacity: 1; transform: translateY(0); }
+
+  pre {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px 24px;
+    font-family: var(--mono-font);
+    font-size: 13px;
+    color: #a5f3c0;
+    overflow-x: auto;
+    margin: 20px 0 28px;
+    line-height: 1.7;
+  }
+
+  pre .k  { color: var(--indigo); }
+  pre .v  { color: #a5f3c0; }
+  pre .c  { color: var(--text-muted); font-style: italic; }
+  pre .s  { color: #fde68a; }
+  pre .h  { color: var(--accent2); font-weight: 600; }
+
+  .note-box {
+    border: 1px solid rgba(251,191,36,0.25);
+    background: rgba(251,191,36,0.05);
+    border-radius: 8px;
+    padding: 16px 22px;
+    margin: 24px 0;
+  }
+
+  .note-box .note-label {
+    font-family: var(--mono-font);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #fbbf24;
+    margin-bottom: 8px;
+  }
+
+  .note-box p { margin: 0; font-size: 15px; color: #fde68a; }
+
+  .deploy-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    margin: 20px 0 28px;
+  }
+
+  .deploy-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px 24px;
+    transition: border-color 0.2s;
+  }
+
+  .deploy-card:hover { border-color: rgba(0,229,160,0.2); }
+
+  .deploy-card .deploy-num {
+    font-family: var(--mono-font);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+
+  .deploy-card h3 { margin: 0 0 8px; font-size: 16px; }
+  .deploy-card p  { margin: 0 0 10px; font-size: 14px; color: var(--text-muted); font-family: var(--body-font); }
+
+  .deploy-flow {
+    font-family: var(--mono-font);
+    font-size: 12px;
+    color: var(--accent);
+    background: rgba(0,229,160,0.05);
+    border: 1px solid rgba(0,229,160,0.15);
+    border-radius: 4px;
+    padding: 8px 12px;
+    letter-spacing: 0.03em;
+  }
+
+  .param-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin: 16px 0 24px;
+  }
+
+  .param-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 18px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 14px;
+    align-items: start;
+  }
+
+  .param-name {
+    font-family: var(--mono-font);
+    font-size: 13px;
+    color: #fde68a;
+    white-space: nowrap;
+    padding-top: 2px;
+  }
+
+  .param-body .label { font-family: var(--heading-font); font-size: 14px; font-weight: 700; color: var(--text-bright); margin-bottom: 3px; }
+  .param-body .desc  { font-size: 14px; color: var(--text-muted); line-height: 1.6; font-family: var(--body-font); }
+
+  @media (max-width: 640px) {
+    .param-item { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<nav class="nav-dark">
+  <a href="../index.html" class="nav-logo"><span class="dot"></span>LearnObservability</a>
+  <ul class="nav-links">
+    <li><a href="../opentelemetry/index.html">OpenTelemetry</a></li>
+    <li><a href="../prometheus/index.html">Prometheus</a></li>
+    <li><a href="../kubernetes/index.html">Kubernetes</a></li>
+    <li><a href="../elastic/index.html">Elastic</a></li>
+  </ul>
+</nav>
+
+<header class="hero">
+  <div class="hero-tags">
+    <span class="tag tag-indigo">Deep Dive</span>
+    <span class="tag tag-green">OTel Collector</span>
+    <span class="tag tag-muted">20 min read</span>
+  </div>
+  <h1>Building <em>Telemetry Pipelines</em><br>with the OTel Collector</h1>
+  <p class="subtitle">A complete guide to processors, transformations, connectors, distributions, debugging, and production deployment patterns — with real config examples throughout.</p>
+  <div class="hero-meta">Thejasekhar Reddy.G &nbsp;·&nbsp; May 8, 2026</div>
+</header>
+
+<article>
+
+  <!-- ── 1. PIPELINES ──────────────────────────────────────────────────── -->
+  <h2 class="fade-in"><span class="eyebrow">01 — Foundations</span>The Collector Is Defined by YAML</h2>
+
+  <p>The Collector's behavior is entirely defined by a YAML configuration file. For any pipeline setup, you need to understand three top-level sections: <strong>receivers</strong>, <strong>exporters</strong>, and <strong>service</strong>.</p>
+
+  <div class="feat-list fade-in">
+    <div class="feat-item">
+      <div class="feat-icon">📥</div>
+      <div class="feat-body">
+        <div class="label">Receivers</div>
+        <div class="desc">The entry points of all telemetry data coming into the Collector from your application and infrastructure. They listen for incoming data and hand it off to the pipeline.</div>
+      </div>
+    </div>
+    <div class="feat-item">
+      <div class="feat-icon">📤</div>
+      <div class="feat-body">
+        <div class="label">Exporters</div>
+        <div class="desc">The final destination for all telemetry data leaving the Collector after it has been processed. You can have multiple exporters sending the same data to different backends simultaneously.</div>
+      </div>
+    </div>
+    <div class="feat-item">
+      <div class="feat-icon">🎛️</div>
+      <div class="feat-body">
+        <div class="label">Service</div>
+        <div class="desc">The central orchestrator that activates and defines the flow of data through the Collector. No component is active unless it is enabled here. It works by defining pipelines for each signal type (traces, metrics, logs), and each pipeline specifies the exact path data will take by linking receivers, processors, and exporters.</div>
+      </div>
+    </div>
+  </div>
+
+  
+<div class="diagram-wrap" aria-hidden="true">
+  <div class="diagram-label">Pipeline: Receiver → [Processors] → Exporter</div>
+  <svg viewBox="0 0 640 130" xmlns="http://www.w3.org/2000/svg" class="diagram-svg">
+    <defs>
+      <filter id="pg"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      <marker id="pa" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#1e2530"/></marker>
+    </defs>
+
+    <!-- Receiver -->
+    <rect x="10" y="30" width="110" height="60" rx="8" fill="#0f1318" stroke="#10b981" stroke-width="1.5"/>
+    <text x="65" y="57" fill="#10b981" font-size="11" font-family="IBM Plex Mono" text-anchor="middle">Receiver</text>
+    <text x="65" y="73" fill="#6b7a8d" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">OTLP · hostmetrics</text>
+    <text x="65" y="84" fill="#6b7a8d" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">jaeger · prometheus</text>
+    <line x1="120" y1="60" x2="148" y2="60" stroke="#1e2530" stroke-width="1.5" marker-end="url(#pa)"/>
+
+    <!-- memory_limiter -->
+    <rect x="148" y="30" width="105" height="60" rx="8" fill="#0f1318" stroke="#f97316" stroke-width="1.5"/>
+    <text x="200" y="55" fill="#f97316" font-size="10" font-family="IBM Plex Mono" text-anchor="middle">memory_limiter</text>
+    <text x="200" y="70" fill="#6b7a8d" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">safety valve</text>
+    <text x="200" y="82" fill="#6b7a8d" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">first in chain</text>
+    <line x1="253" y1="60" x2="281" y2="60" stroke="#1e2530" stroke-width="1.5" marker-end="url(#pa)"/>
+
+    <!-- filter/transform -->
+    <rect x="281" y="30" width="105" height="60" rx="8" fill="#0f1318" stroke="#818cf8" stroke-width="1.5"/>
+    <text x="333" y="55" fill="#818cf8" font-size="10" font-family="IBM Plex Mono" text-anchor="middle">filter/transform</text>
+    <text x="333" y="70" fill="#6b7a8d" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">drop · enrich</text>
+    <text x="333" y="82" fill="#6b7a8d" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">rename · modify</text>
+    <line x1="386" y1="60" x2="414" y2="60" stroke="#1e2530" stroke-width="1.5" marker-end="url(#pa)"/>
+
+    <!-- batch -->
+    <rect x="414" y="30" width="95" height="60" rx="8" fill="#0f1318" stroke="#0ea5e9" stroke-width="1.5"/>
+    <text x="461" y="57" fill="#0ea5e9" font-size="10" font-family="IBM Plex Mono" text-anchor="middle">batch</text>
+    <text x="461" y="71" fill="#6b7a8d" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">group for</text>
+    <text x="461" y="83" fill="#6b7a8d" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">efficiency</text>
+    <line x1="509" y1="60" x2="537" y2="60" stroke="#1e2530" stroke-width="1.5" marker-end="url(#pa)"/>
+
+    <!-- Exporter -->
+    <rect x="537" y="30" width="90" height="60" rx="8" fill="#0f1318" stroke="#10b981" stroke-width="1.5"/>
+    <text x="582" y="57" fill="#10b981" font-size="11" font-family="IBM Plex Mono" text-anchor="middle">Exporter</text>
+    <text x="582" y="71" fill="#6b7a8d" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">OTLP · debug</text>
+    <text x="582" y="83" fill="#6b7a8d" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">prometheus</text>
+
+    <!-- Animated packets -->
+    <circle r="5" fill="#10b981" filter="url(#pg)">
+      <animateMotion dur="2.8s" repeatCount="indefinite" begin="0s" path="M10,60 L627,60"/>
+      <animate attributeName="fill" values="#10b981;#f97316;#818cf8;#0ea5e9;#10b981" keyTimes="0;0.2;0.45;0.7;1" dur="2.8s" repeatCount="indefinite"/>
+    </circle>
+    <circle r="5" fill="#0ea5e9" filter="url(#pg)">
+      <animateMotion dur="2.8s" repeatCount="indefinite" begin="0.9s" path="M10,60 L627,60"/>
+      <animate attributeName="fill" values="#0ea5e9;#f97316;#818cf8;#0ea5e9;#0ea5e9" keyTimes="0;0.2;0.45;0.7;1" dur="2.8s" repeatCount="indefinite"/>
+    </circle>
+    <circle r="5" fill="#818cf8" filter="url(#pg)">
+      <animateMotion dur="2.8s" repeatCount="indefinite" begin="1.8s" path="M10,60 L627,60"/>
+      <animate attributeName="fill" values="#818cf8;#f97316;#818cf8;#0ea5e9;#818cf8" keyTimes="0;0.2;0.45;0.7;1" dur="2.8s" repeatCount="indefinite"/>
+    </circle>
+
+    <text x="320" y="118" fill="#6b7a8d" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">memory_limiter always first · batch always last before exporter</text>
+  </svg>
+</div>
+
+
+  <h3 class="fade-in">The Simplest Possible Pipeline</h3>
+
+  <p>Before adding any processors, start here. This is the minimum config that proves data is flowing — an OTLP receiver accepting logs over gRPC on port 4317, a debug exporter printing everything to the console, and a service block wiring them together.</p>
+
+  <div class="diagram-wrap fade-in" style="margin:20px -1px;">
+    <div class="diagram-label">otelcol.yaml — the simplest possible pipeline</div>
+    <pre style="margin:0;border:none;border-radius:0;background:transparent;padding:20px 24px;font-size:12.5px;line-height:1.85;overflow-x:auto;"><span style="color:#fbbf24;">receivers:</span>
+  <span style="color:#818cf8;">otlp:</span>
+    <span style="color:#818cf8;">protocols:</span>
+      <span style="color:#818cf8;">grpc:</span>
+        <span style="color:#818cf8;">endpoint:</span> <span style="color:#fde68a;">0.0.0.0:4317</span>
+      <span style="color:#818cf8;">http:</span>
+        <span style="color:#818cf8;">endpoint:</span> <span style="color:#fde68a;">0.0.0.0:4318</span>
+
+<span style="color:#fbbf24;">exporters:</span>
+  <span style="color:#818cf8;">debug:</span>
+    <span style="color:#818cf8;">verbosity:</span> <span style="color:#fde68a;">detailed</span>   <span style="color:#6b7a8d;"># prints full content to stderr — dev only</span>
+
+<span style="color:#fbbf24;">service:</span>
+  <span style="color:#818cf8;">pipelines:</span>
+    <span style="color:#818cf8;">logs:</span>
+      <span style="color:#818cf8;">receivers:</span>  <span style="color:#fde68a;">[otlp]</span>
+      <span style="color:#818cf8;">exporters:</span>  <span style="color:#fde68a;">[debug]</span></pre>
+  </div>
+
+  <p>Run the Collector and a synthetic data generator using Docker Compose to verify data is flowing before adding any complexity.</p>
+
+  <div class="diagram-wrap fade-in" style="margin:20px -1px;">
+    <div class="diagram-label">docker-compose.yml — Collector + synthetic log generator</div>
+    <pre style="margin:0;border:none;border-radius:0;background:transparent;padding:20px 24px;font-size:12.5px;line-height:1.85;overflow-x:auto;"><span style="color:#fbbf24;">services:</span>
+  <span style="color:#818cf8;">otelcol:</span>
+    <span style="color:#818cf8;">image:</span> <span style="color:#fde68a;">otel/opentelemetry-collector-contrib:0.153.0</span>
+    <span style="color:#818cf8;">container_name:</span> <span style="color:#fde68a;">otelcol</span>
+    <span style="color:#818cf8;">volumes:</span>
+      - <span style="color:#fde68a;">./otelcol.yaml:/etc/otelcol-contrib/config.yaml</span>
+    <span style="color:#818cf8;">restart:</span> <span style="color:#fde68a;">unless-stopped</span>
+
+  <span style="color:#818cf8;">otelgen:</span>
+    <span style="color:#818cf8;">image:</span> <span style="color:#fde68a;">ghcr.io/krzko/otelgen:v0.5.2</span>
+    <span style="color:#818cf8;">container_name:</span> <span style="color:#fde68a;">otelgen</span>
+    <span style="color:#818cf8;">command:</span>
+      - <span style="color:#fde68a;">"--otel-exporter-otlp-endpoint"</span>
+      - <span style="color:#fde68a;">"otelcol:4317"</span>
+      - <span style="color:#fde68a;">"--insecure"</span>
+      - <span style="color:#fde68a;">"logs"</span>
+      - <span style="color:#fde68a;">"multi"</span>
+    <span style="color:#818cf8;">depends_on:</span>
+      - <span style="color:#fde68a;">otelcol</span>
+
+<span style="color:#fbbf24;">networks:</span>
+  <span style="color:#818cf8;">otelnet:</span>
+    <span style="color:#818cf8;">driver:</span> <span style="color:#fde68a;">bridge</span></pre>
+  </div>
+
+  <div class="diagram-wrap fade-in" style="margin:20px -1px;">
+    <div class="diagram-label">Start and watch</div>
+    <pre style="margin:0;border:none;border-radius:0;background:transparent;padding:20px 24px;font-size:12.5px;line-height:1.85;overflow-x:auto;"><span style="color:#6b7a8d;"># Start both services</span>
+docker compose up -d
+
+<span style="color:#6b7a8d;"># Watch the Collector output — you should see logs flowing immediately</span>
+docker compose logs otelcol -f --no-log-prefix</pre>
+  </div>
+
+  <!-- ── 2. TELEMETRY RECORDS ──────────────────────────────────────────── -->
+  <h2 class="fade-in"><span class="eyebrow">02 — Understanding the Data</span>Telemetry Records: Logs Deep Dive</h2>
+
+  <p>Before you can transform telemetry, you need to understand its structure. Let's walk through what a log record actually looks like inside the Collector.</p>
+
+  <h3 class="fade-in">ResourceLogs and Resource Attributes</h3>
+
+  <div class="feat-list fade-in">
+    <div class="feat-item">
+      <div class="feat-icon">📦</div>
+      <div class="feat-body">
+        <div class="label">ResourceLog #0 — The top-level container</div>
+        <div class="desc">The <code>#0</code> indicates it's the first resource log in this batch. All telemetry within this block comes from the same Resource — a service, container, or host machine.</div>
+      </div>
+    </div>
+    <div class="feat-item">
+      <div class="feat-icon">🏷️</div>
+      <div class="feat-body">
+        <div class="label">ResourceAttributes — Key-value pairs describing the entity</div>
+        <div class="desc">These describe the entity that produced the logs — a service, container, or host machine. Example attributes: <code>service.name</code>, <code>k8s.pod.name</code>. These are applied to every log generated by this resource.</div>
+      </div>
+    </div>
+  </div>
+
+  <h3 class="fade-in">ScopeLogs</h3>
+
+  <div class="feat-list fade-in">
+    <div class="feat-item">
+      <div class="feat-icon">🔭</div>
+      <div class="feat-body">
+        <div class="label">ScopeLogs #0 — Grouped by instrumentation scope</div>
+        <div class="desc">Within a resource, telemetry is grouped by its origin, known as the instrumentation scope. This block contains all logs from a single scope.</div>
+      </div>
+    </div>
+    <div class="feat-item">
+      <div class="feat-icon">📍</div>
+      <div class="feat-body">
+        <div class="label">Instrumentation Scope</div>
+        <div class="desc">Identifies the specific library or module that generated the log. This is useful for knowing which part of your application emitted the log.</div>
+      </div>
+    </div>
+  </div>
+
+  <h3 class="fade-in">LogRecord — The actual log entry</h3>
+
+  <p>Within a single ResourceLog block, you may see multiple LogRecord entries — they all belong to the same parent Resource. Key fields on each LogRecord:</p>
+
+  <div class="feat-list fade-in">
+    <div class="feat-item">
+      <div class="feat-icon">⏱️</div>
+      <div class="feat-body">
+        <div class="label">Timestamp</div>
+        <div class="desc">When the event occurred.</div>
+      </div>
+    </div>
+    <div class="feat-item">
+      <div class="feat-icon">🔢</div>
+      <div class="feat-body">
+        <div class="label">SeverityNumber / SeverityText</div>
+        <div class="desc">The log level — such as <code>ERROR</code> or <code>INFO</code>. SeverityNumber is the numeric representation (e.g. INFO = 9).</div>
+      </div>
+    </div>
+    <div class="feat-item">
+      <div class="feat-icon">💬</div>
+      <div class="feat-body">
+        <div class="label">Body</div>
+        <div class="desc">The actual log message content.</div>
+      </div>
+    </div>
+    <div class="feat-item">
+      <div class="feat-icon">📋</div>
+      <div class="feat-body">
+        <div class="label">Attributes</div>
+        <div class="desc">Contextual field pairs that provide context specific to that log event. You'll see the explicit data type for each value, which is very helpful when manipulating telemetry data with OTTL.</div>
+      </div>
+    </div>
+    <div class="feat-item">
+      <div class="feat-icon">🔗</div>
+      <div class="feat-body">
+        <div class="label">TraceId / SpanId</div>
+        <div class="desc">These top-level fields are crucial for correlation. When populated, they directly link a log to a specific trace and span, allowing you to navigate between logs and traces in your observability backend.</div>
+      </div>
+    </div>
+  </div>
+
+  <h3 class="fade-in">What a Real Log Record Looks Like</h3>
+
+  <p>Here is what the <code>debug</code> exporter actually prints when a log record flows through your pipeline. This is the raw, unprocessed output — exactly what arrives at the Collector before any processors touch it.</p>
+
+  <div class="diagram-wrap fade-in" style="margin:20px -1px;">
+    <div class="diagram-label">Raw log record — as seen in debug exporter output (before any processing)</div>
+    <pre style="margin:0;border:none;border-radius:0;background:transparent;padding:20px 24px;font-size:12.5px;line-height:1.85;overflow-x:auto;"><span style="color:#10b981;">ResourceLog #0</span>
+  <span style="color:#818cf8;">Resource SchemaURL:</span> https://opentelemetry.io/schemas/1.26.0
+  <span style="color:#818cf8;">Resource attributes:</span>
+    <span style="color:#fde68a;">-> host.name:            Str(node-1)</span>
+    <span style="color:#fde68a;">-> k8s.container.name:  Str(checkout-service)</span>
+    <span style="color:#fde68a;">-> k8s.namespace.name:  Str(default)</span>
+    <span style="color:#fde68a;">-> k8s.pod.name:        Str(checkout-pod-ab06ca8b)</span>
+    <span style="color:#fde68a;">-> service.name:        Str(checkout-service)</span>
+
+  <span style="color:#818cf8;">ScopeLogs #0</span>
+    <span style="color:#818cf8;">InstrumentationScope</span> checkout-service
+
+    <span style="color:#10b981;">LogRecord #0</span>
+      ObservedTimestamp: 2025-07-06 11:21:57.085421018 +0000 UTC
+      Timestamp:         2025-07-06 11:21:57.085420886 +0000 UTC
+      SeverityText:      <span style="color:#f97316;">Error</span>
+      SeverityNumber:    <span style="color:#f97316;">Error(17)</span>
+      Body:              Str(order payment failed for user 1234)
+      <span style="color:#818cf8;">Attributes:</span>
+        <span style="color:#f97316;">-> trace_id:          Str(46287c1c7b7eebea22af2b48b97f4a49)</span>   <span style="color:#6b7a8d;"># ⚠ wrong place</span>
+        <span style="color:#f97316;">-> span_id:           Str(f5777521efe11f94)</span>                   <span style="color:#6b7a8d;"># ⚠ wrong place</span>
+        <span style="color:#f97316;">-> trace_flags:       Str(01)</span>                                 <span style="color:#6b7a8d;"># ⚠ wrong place</span>
+        <span style="color:#f97316;">-> service.name:      Str(checkout-service)</span>                  <span style="color:#6b7a8d;"># ⚠ duplicate</span>
+        <span style="color:#f97316;">-> k8s.pod.name:      Str(checkout-pod-ab06ca8b)</span>             <span style="color:#6b7a8d;"># ⚠ duplicate</span>
+        <span style="color:#f97316;">-> http.method:       Str(POST)</span>                               <span style="color:#6b7a8d;"># ⚠ deprecated</span>
+        <span style="color:#f97316;">-> http.status_code:  Int(500)</span>                               <span style="color:#6b7a8d;"># ⚠ deprecated</span>
+        -> worker_id:         Str(1234)
+        -> phase:             Str(checkout)
+      <span style="color:#6b7a8d;">Trace ID:   (empty)</span>
+      <span style="color:#6b7a8d;">Span ID:    (empty)</span>
+      <span style="color:#6b7a8d;">Flags: 0</span></pre>
+  </div>
+
+  <p>There are three issues in this record that the transform processor fixes. <strong>Misplaced trace context</strong> — <code>trace_id</code>, <code>span_id</code>, and <code>trace_flags</code> are sitting inside the Attributes map when they belong in the dedicated top-level fields. Backends rely on those top-level fields for log-to-trace correlation. <strong>Redundant attributes</strong> — <code>service.name</code> and <code>k8s.pod.name</code> already live on the Resource, so carrying them again on every LogRecord wastes storage. <strong>Deprecated HTTP attributes</strong> — <code>http.method</code> and <code>http.status_code</code> are deprecated in favour of <code>http.request.method</code> and <code>http.response.status_code</code>.</p>
+
+  <p>After the transform processor runs — moving trace context to the right fields, deleting the duplicates, and renaming the HTTP attributes — the same record looks like this:</p>
+
+  <div class="diagram-wrap fade-in" style="margin:20px -1px;">
+    <div class="diagram-label">Clean log record — after transform processor, correct and compact</div>
+    <pre style="margin:0;border:none;border-radius:0;background:transparent;padding:20px 24px;font-size:12.5px;line-height:1.85;overflow-x:auto;"><span style="color:#10b981;">ResourceLog #0</span>
+  <span style="color:#818cf8;">Resource attributes:</span>
+    <span style="color:#fde68a;">-> host.name:           Str(node-1)</span>
+    <span style="color:#fde68a;">-> k8s.container.name: Str(checkout-service)</span>
+    <span style="color:#fde68a;">-> k8s.namespace.name: Str(default)</span>
+    <span style="color:#fde68a;">-> k8s.pod.name:       Str(checkout-pod-ab06ca8b)</span>
+    <span style="color:#fde68a;">-> service.name:       Str(checkout-service)</span>
+
+  <span style="color:#818cf8;">ScopeLogs #0</span>
+    <span style="color:#818cf8;">InstrumentationScope</span> checkout-service
+
+    <span style="color:#10b981;">LogRecord #0</span>
+      Timestamp:         2025-07-06 11:21:57.085420886 +0000 UTC
+      SeverityText:      <span style="color:#f97316;">Error</span>
+      SeverityNumber:    <span style="color:#f97316;">Error(17)</span>
+      Body:              Str(order payment failed for user 1234)
+      <span style="color:#818cf8;">Attributes:</span>
+        <span style="color:#10b981;">-> worker_id:                  Str(1234)</span>
+        <span style="color:#10b981;">-> phase:                      Str(checkout)</span>
+        <span style="color:#10b981;">-> http.request.method:        Str(POST)</span>      <span style="color:#6b7a8d;"># ✓ updated</span>
+        <span style="color:#10b981;">-> http.response.status_code:  Int(500)</span>       <span style="color:#6b7a8d;"># ✓ updated</span>
+      <span style="color:#10b981;">Trace ID:  46287c1c7b7eebea22af2b48b97f4a49</span>    <span style="color:#6b7a8d;"># ✓ now in correct field</span>
+      <span style="color:#10b981;">Span ID:   f5777521efe11f94</span>                    <span style="color:#6b7a8d;"># ✓ now in correct field</span>
+      <span style="color:#10b981;">Flags: 1</span>                                       <span style="color:#6b7a8d;"># ✓ now in correct field</span></pre>
+  </div>
+
+  <div class="opinion fade-in">
+    <div class="label">Why this matters in practice</div>
+    <p>The before/after difference isn't cosmetic. The clean record is smaller — no redundant fields. Log-to-trace correlation works — backends use the top-level Trace ID and Span ID fields, not attributes. And your queries are consistent — <code>http.request.method</code> is the current semantic convention that every downstream tool understands.</p>
+  </div>
+
+  <!-- ── 3. PROCESSORS ─────────────────────────────────────────────────── -->
+  <h2 class="fade-in"><span class="eyebrow">03 — Processing</span>Processing and Transforming Telemetry</h2>
+
+  <p>The real power of the Collector lies in its ability to process data in-flight. This is where processors come in. <strong>Processors are intermediary components in a pipeline that can inspect, modify, filter, and enrich your telemetry.</strong></p>
+
+  <div class="pullquote fade-in">
+    <p>Receiver → [Processors] → Exporter</p>
+  </div>
+
+  <h3 class="fade-in">Batching Telemetry for Efficiency</h3>
+
+  <p>Sending every single span or metric individually over the network is incredibly inefficient. It creates high network traffic and puts unnecessary load on your backends. The <strong>batch processor</strong> solves this by grouping telemetry into batches before exporting.</p>
+
+  <div class="diagram-wrap fade-in" style="margin:20px -1px;">
+    <div class="diagram-label">batch processor — add to processors: section and wire into service.pipelines</div>
+    <pre style="margin:0;border:none;border-radius:0;background:transparent;padding:20px 24px;font-size:12.5px;line-height:1.85;overflow-x:auto;"><span style="color:#fbbf24;">processors:</span>
+  <span style="color:#818cf8;">batch:</span>
+    <span style="color:#6b7a8d;"># send when either condition is met first</span>
+    <span style="color:#818cf8;">send_batch_size:</span> <span style="color:#fde68a;">8192</span>    <span style="color:#6b7a8d;"># send when batch reaches this many items</span>
+    <span style="color:#818cf8;">timeout:</span>         <span style="color:#fde68a;">200ms</span>    <span style="color:#6b7a8d;"># or when this time elapses — whichever comes first</span>
+
+<span style="color:#fbbf24;">service:</span>
+  <span style="color:#818cf8;">pipelines:</span>
+    <span style="color:#818cf8;">logs:</span>
+      <span style="color:#818cf8;">receivers:</span>   <span style="color:#fde68a;">[otlp]</span>
+      <span style="color:#818cf8;">processors:</span>  <span style="color:#fde68a;">[batch]</span>   <span style="color:#6b7a8d;"># add to processors list — order matters</span>
+      <span style="color:#818cf8;">exporters:</span>   <span style="color:#fde68a;">[otlphttp]</span></pre>
+  </div>
+
+  <p>With this config, your Collector buffers data for up to 200ms or until 8192 items accumulate, then sends it to the exporters in one efficient action.</p>
+
+  <h3 class="fade-in">Reducing Noise by Filtering Telemetry</h3>
+
+  <p>Observability data can be noisy. Frequent DEBUG level logs are often useful in development but can be costly and redundant in production. Use the <strong>filter processor</strong>, which lets you drop telemetry data using the powerful <strong>OpenTelemetry Transformation Language (OTTL)</strong>.</p>
+
+  <div class="diagram-wrap fade-in" style="margin:20px -1px;">
+    <div class="diagram-label">filter processor — drop noisy logs, keep only INFO and above</div>
+    <pre style="margin:0;border:none;border-radius:0;background:transparent;padding:20px 24px;font-size:12.5px;line-height:1.85;overflow-x:auto;"><span style="color:#fbbf24;">processors:</span>
+  <span style="color:#818cf8;">filter:</span>
+    <span style="color:#818cf8;">error_mode:</span> <span style="color:#fde68a;">ignore</span>
+    <span style="color:#818cf8;">logs:</span>
+      <span style="color:#818cf8;">log_record:</span>
+        <span style="color:#6b7a8d;"># DROP any log below INFO — TRACE and DEBUG are discarded</span>
+        - <span style="color:#fde68a;">severity_number &lt; SEVERITY_NUMBER_INFO</span>
+
+<span style="color:#fbbf24;">service:</span>
+  <span style="color:#818cf8;">pipelines:</span>
+    <span style="color:#818cf8;">logs:</span>
+      <span style="color:#818cf8;">receivers:</span>   <span style="color:#fde68a;">[otlp]</span>
+      <span style="color:#818cf8;">processors:</span>  <span style="color:#fde68a;">[filter, batch]</span>   <span style="color:#6b7a8d;"># filter first, then batch</span>
+      <span style="color:#818cf8;">exporters:</span>   <span style="color:#fde68a;">[otlphttp]</span></pre>
+  </div>
+
+  <p>Now any log with a severity number less than 9 (INFO) will be dropped before reaching the exporter.</p>
+
+  <h3 class="fade-in">Modifying and Enriching Telemetry Data</h3>
+
+  <p>When you need to add, remove, or modify attributes in your telemetry data, there are three general-purpose processors:</p>
+
+  <div class="feat-list fade-in">
+    <div class="feat-item">
+      <div class="feat-icon">🏗️</div>
+      <div class="feat-body">
+        <div class="label">resourceprocessor</div>
+        <div class="desc">For actions targeting resource-level attributes — e.g. <code>host.name</code>, <code>service.name</code>. Operates on the Resource object that wraps your telemetry.</div>
+      </div>
+    </div>
+    <div class="feat-item">
+      <div class="feat-icon">🔧</div>
+      <div class="feat-body">
+        <div class="label">attributeprocessor</div>
+        <div class="desc">For simple actions on the attributes of individual logs, spans, or metrics. Good for inserting, updating, deleting, or hashing specific attribute values.</div>
+      </div>
+    </div>
+    <div class="feat-item">
+      <div class="feat-icon">⚡</div>
+      <div class="feat-body">
+        <div class="label">transformprocessor</div>
+        <div class="desc">The most powerful of the three — for performing complex transformations on any part of your telemetry data using OTTL statements.</div>
+      </div>
+    </div>
+  </div>
+
+  <p><strong>Use cases for these processors:</strong> redacting or removing sensitive information before it leaves your systems; enriching data by adding static attributes; renaming or standardizing attributes to conform to semantic conventions across different services; correcting malformed or misplaced data sent by older or misconfigured instrumentation.</p>
+
+  <h3 class="fade-in">Real OTTL Transformations</h3>
+
+  <p>Here are three common real-world transformations using the <code>transformprocessor</code>:</p>
+
+  <div class="two-col fade-in">
+    <div class="grid-card">
+      <h4>1. Misplaced Trace Context</h4>
+      <p>Moving trace data out of Attributes (wrong place) up to the top-level fields (correct place) where the Collector and backends expect them.</p>
+    </div>
+    <div class="grid-card">
+      <h4>2. Redundant Attributes</h4>
+      <p>Resource attributes like <code>k8s.pod.name</code> and <code>service.name</code> are deduplicating in the log record's attributes — delete them from the lower level.</p>
+    </div>
+    <div class="grid-card">
+      <h4>3. Deprecated Attributes</h4>
+      <p>HTTP attributes like <code>http.method</code>, <code>http.target</code>, and <code>http.status_code</code> have been deprecated in favor of newer semantic conventions.</p>
+    </div>
+    <div class="grid-card">
+      <h4>OTTL Functions</h4>
+      <p><code>set(field, value)</code> — sets a value. <code>delete_key(attributes, "key")</code> — removes the original key. Statements run in order within each context block.</p>
+    </div>
+  </div>
+
+  <div class="diagram-wrap fade-in" style="margin:20px -1px;">
+    <div class="diagram-label">transform processor — fix trace context, remove duplicates, rename deprecated HTTP attrs</div>
+    <pre style="margin:0;border:none;border-radius:0;background:transparent;padding:20px 24px;font-size:12.5px;line-height:1.85;overflow-x:auto;"><span style="color:#fbbf24;">processors:</span>
+  <span style="color:#818cf8;">transform:</span>
+    <span style="color:#818cf8;">error_mode:</span> <span style="color:#fde68a;">ignore</span>
+    <span style="color:#818cf8;">log_statements:</span>
+      <span style="color:#6b7a8d;"># 1. Move trace context from attributes to the correct top-level fields</span>
+      <span style="color:#6b7a8d;">#    Backends use these top-level fields for log-to-trace correlation</span>
+      - <span style="color:#818cf8;">context:</span> <span style="color:#fde68a;">log</span>
+        <span style="color:#818cf8;">statements:</span>
+          - <span style="color:#fde68a;">set(trace_id.string, attributes["trace_id"])</span>
+          - <span style="color:#fde68a;">set(span_id.string, attributes["span_id"])</span>
+          - <span style="color:#fde68a;">set(flags, Int(attributes["trace_flags"]))</span>
+
+      <span style="color:#6b7a8d;"># 2. Delete the now-redundant trace context attributes</span>
+      - <span style="color:#818cf8;">context:</span> <span style="color:#fde68a;">log</span>
+        <span style="color:#818cf8;">statements:</span>
+          - <span style="color:#fde68a;">delete_key(attributes, "trace_id")</span>
+          - <span style="color:#fde68a;">delete_key(attributes, "span_id")</span>
+          - <span style="color:#fde68a;">delete_key(attributes, "trace_flags")</span>
+
+      <span style="color:#6b7a8d;"># 3. Delete attributes already present on the Resource — no need to repeat them</span>
+      - <span style="color:#818cf8;">context:</span> <span style="color:#fde68a;">log</span>
+        <span style="color:#818cf8;">statements:</span>
+          - <span style="color:#fde68a;">delete_key(attributes, "service.name")</span>
+          - <span style="color:#fde68a;">delete_key(attributes, "k8s.pod.name")</span>
+          - <span style="color:#fde68a;">delete_key(attributes, "k8s.namespace.name")</span>
+          - <span style="color:#fde68a;">delete_key(attributes, "k8s.container.name")</span>
+
+      <span style="color:#6b7a8d;"># 4. Rename deprecated HTTP attributes to current semantic conventions</span>
+      - <span style="color:#818cf8;">context:</span> <span style="color:#fde68a;">log</span>
+        <span style="color:#818cf8;">statements:</span>
+          - <span style="color:#fde68a;">set(attributes["http.request.method"], attributes["http.method"])</span>
+          - <span style="color:#fde68a;">delete_key(attributes, "http.method")</span>
+          - <span style="color:#fde68a;">set(attributes["http.response.status_code"], attributes["http.status_code"])</span>
+          - <span style="color:#fde68a;">delete_key(attributes, "http.status_code")</span>
+
+<span style="color:#fbbf24;">service:</span>
+  <span style="color:#818cf8;">pipelines:</span>
+    <span style="color:#818cf8;">logs:</span>
+      <span style="color:#818cf8;">receivers:</span>   <span style="color:#fde68a;">[otlp]</span>
+      <span style="color:#818cf8;">processors:</span>  <span style="color:#fde68a;">[filter, transform, batch]</span>
+      <span style="color:#818cf8;">exporters:</span>   <span style="color:#fde68a;">[otlphttp]</span></pre>
+  </div>
+
+  <!-- ── 4. MEMORY LIMITER ──────────────────────────────────────────────── -->
+  <h2 class="fade-in"><span class="eyebrow">04 — Resilience</span>Ensuring Resilience with Memory Limiter</h2>
+
+  <p>An overloaded service could suddenly send a massive flood of data, overwhelming the Collector and causing it to run out of memory and crash. This would create a total visibility outage.</p>
+
+  <p>The <strong>memory_limiter processor</strong> acts as a safety valve to prevent this. It monitors memory usage and starts rejecting data if it exceeds a configured limit, enforcing backpressure on the data source.</p>
+
+  <pre class="fade-in"><span class="k">memory_limiter:</span>
+  <span class="k">check_interval:</span> <span class="v">1s</span>
+  <span class="k">limit_mib:</span> <span class="v">400</span>
+  <span class="k">spike_limit_mib:</span> <span class="v">100</span></pre>
+
+  <div class="note-box fade-in">
+    <div class="note-label">⚠️ Critical Rule</div>
+    <p>The memory_limiter must come <strong>first</strong> in your pipeline's processor list. If it's over the limit, you want to reject data immediately — before wasting CPU cycles on other processing.</p>
+  </div>
+
+  <!-- ── 5. PARALLEL PIPELINES ─────────────────────────────────────────── -->
+  <h2 class="fade-in"><span class="eyebrow">05 — Advanced Pipelines</span>Handling Multiple Signal Types with Parallel Pipelines</h2>
+
+  <p>You can handle traces, metrics, and logs simultaneously by defining parallel pipelines — one for each signal type — in the service section. Each runs independently with its own receiver, processor, and exporter chain.</p>
+
+  <h3 class="fade-in">Fanning Out to Multiple Destinations</h3>
+
+  <p>A key advantage of the OTel Collector is its ability to easily route telemetry to multiple destinations at once — a concept called <strong>"fanning out"</strong>. This is simply done by adding more exporters to a pipeline's exporters list. The same data flows to all of them simultaneously.</p>
+
+  <!-- ── 6. CONNECTORS ──────────────────────────────────────────────────── -->
+  <h2 class="fade-in"><span class="eyebrow">06 — Connectors</span>Chaining Pipelines with Connectors</h2>
+
+  <p>You can create powerful data processing flows by generating new telemetry signals from your existing data. This is possible with <strong>connectors</strong>. A connector is a special component that acts as both an exporter for one pipeline and a receiver for another — allowing you to chain pipelines together.</p>
+
+  <p>Example: counting the number of errors by creating a metric named <code>log-error.count</code> that increments every time it sees a log with a severity of ERROR or above — using the <strong>count connector</strong>.</p>
+
+  
+<div class="diagram-wrap" aria-hidden="true">
+  <div class="diagram-label">Connectors — Chaining Pipelines Together</div>
+  <svg viewBox="0 0 580 180" xmlns="http://www.w3.org/2000/svg" class="diagram-svg">
+    <defs>
+      <filter id="cng"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      <marker id="cna" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#1e2530"/></marker>
+    </defs>
+
+    <!-- Logs pipeline -->
+    <text x="10" y="28" fill="#6b7a8d" font-size="10" font-family="IBM Plex Mono">logs pipeline</text>
+    <rect x="10" y="35" width="80" height="36" rx="6" fill="#0f1318" stroke="#0ea5e9" stroke-width="1.2"/>
+    <text x="50" y="57" fill="#0ea5e9" font-size="10" font-family="IBM Plex Mono" text-anchor="middle">receivers</text>
+    <line x1="90" y1="53" x2="115" y2="53" stroke="#1e2530" stroke-width="1.2" marker-end="url(#cna)"/>
+    <rect x="115" y="35" width="80" height="36" rx="6" fill="#0f1318" stroke="#818cf8" stroke-width="1.2"/>
+    <text x="155" y="57" fill="#818cf8" font-size="10" font-family="IBM Plex Mono" text-anchor="middle">processors</text>
+    <line x1="195" y1="53" x2="220" y2="53" stroke="#1e2530" stroke-width="1.2" marker-end="url(#cna)"/>
+
+    <!-- Connector box (acts as exporter for logs AND receiver for metrics) -->
+    <rect x="220" y="20" width="120" height="130" rx="10" fill="#0f1318" stroke="#fbbf24" stroke-width="1.8"/>
+    <text x="280" y="50" fill="#fbbf24" font-size="10" font-family="IBM Plex Mono" text-anchor="middle">CONNECTOR</text>
+    <text x="280" y="65" fill="#6b7a8d" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">count/log-errors</text>
+    <text x="280" y="85" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">← exporter for logs</text>
+    <text x="280" y="100" fill="#6b7a8d" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">receiver for metrics →</text>
+    <text x="280" y="120" fill="#fbbf24" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">generates metric</text>
+    <text x="280" y="133" fill="#fbbf24" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">log-error.count</text>
+
+    <!-- Metrics pipeline -->
+    <text x="360" y="28" fill="#6b7a8d" font-size="10" font-family="IBM Plex Mono">metrics pipeline</text>
+    <line x1="340" y1="100" x2="365" y2="100" stroke="#1e2530" stroke-width="1.2" marker-end="url(#cna)"/>
+    <rect x="365" y="82" width="80" height="36" rx="6" fill="#0f1318" stroke="#818cf8" stroke-width="1.2"/>
+    <text x="405" y="104" fill="#818cf8" font-size="10" font-family="IBM Plex Mono" text-anchor="middle">processors</text>
+    <line x1="445" y1="100" x2="470" y2="100" stroke="#1e2530" stroke-width="1.2" marker-end="url(#cna)"/>
+    <rect x="470" y="82" width="80" height="36" rx="6" fill="#0f1318" stroke="#f97316" stroke-width="1.2"/>
+    <text x="510" y="104" fill="#f97316" font-size="10" font-family="IBM Plex Mono" text-anchor="middle">exporters</text>
+
+    <!-- Animated log packet → connector -->
+    <circle r="4" fill="#0ea5e9" filter="url(#cng)">
+      <animateMotion dur="3s" repeatCount="indefinite" begin="0s" path="M10,53 L220,53 Q280,53 280,75"/>
+    </circle>
+    <!-- Animated metric packet: connector → metrics pipeline -->
+    <circle r="4" fill="#fbbf24" filter="url(#cng)">
+      <animateMotion dur="2s" repeatCount="indefinite" begin="1.5s" path="M280,120 Q280,100 340,100 L560,100"/>
+    </circle>
+  </svg>
+</div>
+
+
+  <pre class="fade-in"><span class="k">connectors:</span>
+  <span class="k">count/log-errors:</span>
+    <span class="k">logs:</span>
+      <span class="k">log-error.count:</span>
+        <span class="k">description:</span> <span class="s">count of errors logged</span>
+        <span class="k">conditions:</span>
+          - <span class="v">severity_number &gt;= SEVERITY_NUMBER_ERROR</span>
+
+<span class="k">service:</span>
+  <span class="k">pipelines:</span>
+    <span class="k">logs:</span>
+      <span class="k">receivers:</span> <span class="v">[...]</span>
+      <span class="k">processors:</span> <span class="v">[...]</span>
+      <span class="k">exporters:</span> <span class="v">[debug, count/log-errors]</span>
+    <span class="k">metrics:</span>
+      <span class="k">receivers:</span> <span class="v">[count/log-errors]</span>
+      <span class="k">processors:</span> <span class="v">[memory_limiter, batch]</span>
+      <span class="k">exporters:</span> <span class="v">[debug]</span></pre>
+
+  <p>It allows you to derive new insights from existing data streams directly within the Collector. Another powerful connector is the <strong>spanmetric connector</strong> — it automatically generates RED metrics (request rates, error counts, and duration histograms) directly from your trace data. Note: at this time it is in alpha state.</p>
+
+  <!-- ── 7. DISTRIBUTIONS ───────────────────────────────────────────────── -->
+  <h2 class="fade-in"><span class="eyebrow">07 — Distributions</span>Collector Distributions</h2>
+
+  <p>When you use the OpenTelemetry Collector, you are not running a single monolithic application. Instead you use a <strong>distribution</strong> — a specific binary packaged with a curated set of components (receivers, processors, exporters, and extensions). There are three types:</p>
+
+  <div class="deploy-grid fade-in">
+    <div class="deploy-card">
+      <div class="deploy-num">01 — Official OpenTelemetry Distributions</div>
+      <h3>Core &amp; Contrib</h3>
+      <p><strong>Core (otelcol):</strong> Minimal, lightweight distribution that includes only the most essential and stable components. <strong>Contrib (otelcol-contrib):</strong> The most comprehensive version — includes almost every component from both core and contrib repositories. Recommended for getting started.</p>
+    </div>
+    <div class="deploy-card">
+      <div class="deploy-num">02 — Vendor Distributions</div>
+      <h3>Pre-configured for specific backends</h3>
+      <p>Typically based on otelcol-contrib but pre-configured with the vendor's specific exporter and other recommended settings. Good if you're committed to a specific backend.</p>
+    </div>
+    <div class="deploy-card">
+      <div class="deploy-num">03 — Custom Distributions</div>
+      <h3>Recommended for production</h3>
+      <p>For production environments, the recommended practice is to build your own custom distribution using the <strong>OpenTelemetry Collector Builder (ocb)</strong> tool. Create a simple manifest file listing the components you want, then run the ocb tool to compile your custom binary — minimal attack surface, exactly what you need.</p>
+    </div>
+  </div>
+
+  <!-- ── 8. DEBUGGING ──────────────────────────────────────────────────── -->
+  <h2 class="fade-in"><span class="eyebrow">08 — Debugging</span>Debugging and Observing Your Pipeline</h2>
+
+  <h3 class="fade-in">Validating Your Configuration</h3>
+
+  <pre class="fade-in"><span class="v">$ otelcol-contrib validate --config=config.yaml</span></pre>
+
+  <h3 class="fade-in">Live Debugging with zPages</h3>
+
+  <p>For debugging the Collector components themselves, you can enable the <strong>zPages extension</strong>. Once the Collector is running, you can access several debugging pages:</p>
+
+  <div class="two-col fade-in">
+    <div class="grid-card">
+      <h4>/debug/pipelinez</h4>
+      <p>View your pipeline components, their configuration, and data flow statistics in real time.</p>
+    </div>
+    <div class="grid-card">
+      <h4>/debug/tracez</h4>
+      <p>See recently sampled traces passing through the Collector — useful for verifying trace data is flowing correctly.</p>
+    </div>
+  </div>
+
+  <pre class="fade-in"><span class="k">extensions:</span>
+  <span class="k">zpages:</span>
+    <span class="c"># default endpoint is localhost:55679</span>
+
+<span class="k">service:</span>
+  <span class="k">extensions:</span> <span class="v">[zpages]</span></pre>
+
+  <h3 class="fade-in">Observing the Collector's Internal Telemetry</h3>
+
+  <p>In production environments you'll need to monitor the Collector's health and performance over time. This is configured under the <code>service.telemetry</code> section. By default, the Collector sends its own internal logs to stderr — it's often the first place you'll check when there's a problem with your pipeline.</p>
+
+  <div class="opinion fade-in">
+    <div class="label">Key metrics to watch</div>
+    <p>Scrape <code>localhost:8888/metrics</code> and watch: <code>otelcol_processor_dropped_metric_points</code> and <code>otelcol_exporter_send_failed_metric_points</code> — these are the canaries that tell you your pipeline is struggling before users notice.</p>
+  </div>
+
+  <!-- ── 9. DEPLOYMENT ─────────────────────────────────────────────────── -->
+  <h2 class="fade-in"><span class="eyebrow">09 — Production</span>Going to Production: Collector Deployment Patterns</h2>
+
+  
+<div class="diagram-wrap" aria-hidden="true">
+  <div class="diagram-label">Production Deployment Patterns</div>
+  <svg viewBox="0 0 620 210" xmlns="http://www.w3.org/2000/svg" class="diagram-svg">
+    <defs>
+      <filter id="dg"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      <marker id="da" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#1e2530"/></marker>
+    </defs>
+
+    <!-- Pattern 1: Agent-only -->
+    <text x="10" y="18" fill="#6b7a8d" font-size="9" font-family="IBM Plex Mono">01 · AGENT ONLY</text>
+    <rect x="10" y="24" width="60" height="28" rx="5" fill="#0f1318" stroke="#10b981" stroke-width="1.2"/>
+    <text x="40" y="42" fill="#10b981" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">App</text>
+    <line x1="70" y1="38" x2="88" y2="38" stroke="#1e2530" stroke-width="1" marker-end="url(#da)"/>
+    <rect x="88" y="24" width="70" height="28" rx="5" fill="#0f1318" stroke="#818cf8" stroke-width="1.2"/>
+    <text x="123" y="42" fill="#818cf8" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Collector</text>
+    <line x1="158" y1="38" x2="176" y2="38" stroke="#1e2530" stroke-width="1" marker-end="url(#da)"/>
+    <rect x="176" y="24" width="60" height="28" rx="5" fill="#0f1318" stroke="#f97316" stroke-width="1.2"/>
+    <text x="206" y="42" fill="#f97316" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Backend</text>
+    <circle r="3.5" fill="#10b981" filter="url(#dg)">
+      <animateMotion dur="2s" repeatCount="indefinite" begin="0s" path="M10,38 L236,38"/>
+    </circle>
+
+    <!-- Pattern 2: Agent + Gateway -->
+    <text x="10" y="88" fill="#6b7a8d" font-size="9" font-family="IBM Plex Mono">02 · AGENT + GATEWAY</text>
+    <rect x="10" y="94" width="60" height="28" rx="5" fill="#0f1318" stroke="#10b981" stroke-width="1.2"/>
+    <text x="40" y="112" fill="#10b981" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">App</text>
+    <line x1="70" y1="108" x2="88" y2="108" stroke="#1e2530" stroke-width="1" marker-end="url(#da)"/>
+    <rect x="88" y="94" width="70" height="28" rx="5" fill="#0f1318" stroke="#818cf8" stroke-width="1.2"/>
+    <text x="123" y="108" fill="#818cf8" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">Agent</text>
+    <text x="123" y="118" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">enrich</text>
+    <line x1="158" y1="108" x2="176" y2="108" stroke="#1e2530" stroke-width="1" marker-end="url(#da)"/>
+    <rect x="176" y="94" width="74" height="28" rx="5" fill="#0f1318" stroke="#fbbf24" stroke-width="1.5"/>
+    <text x="213" y="108" fill="#fbbf24" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">Gateway</text>
+    <text x="213" y="118" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">route·sample</text>
+    <line x1="250" y1="108" x2="268" y2="108" stroke="#1e2530" stroke-width="1" marker-end="url(#da)"/>
+    <rect x="268" y="94" width="60" height="28" rx="5" fill="#0f1318" stroke="#f97316" stroke-width="1.2"/>
+    <text x="298" y="112" fill="#f97316" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">Backend</text>
+    <circle r="3.5" fill="#818cf8" filter="url(#dg)">
+      <animateMotion dur="2.4s" repeatCount="indefinite" begin="0.3s" path="M10,108 L328,108"/>
+    </circle>
+
+    <!-- Pattern 3: High Scale with Queue -->
+    <text x="10" y="158" fill="#6b7a8d" font-size="9" font-family="IBM Plex Mono">03 · HIGH SCALE WITH MESSAGE QUEUE</text>
+    <rect x="10" y="164" width="60" height="28" rx="5" fill="#0f1318" stroke="#10b981" stroke-width="1.2"/>
+    <text x="40" y="182" fill="#10b981" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">App</text>
+    <line x1="70" y1="178" x2="88" y2="178" stroke="#1e2530" stroke-width="1" marker-end="url(#da)"/>
+    <rect x="88" y="164" width="64" height="28" rx="5" fill="#0f1318" stroke="#818cf8" stroke-width="1.2"/>
+    <text x="120" y="182" fill="#818cf8" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">Agent</text>
+    <line x1="152" y1="178" x2="170" y2="178" stroke="#1e2530" stroke-width="1" marker-end="url(#da)"/>
+    <rect x="170" y="164" width="70" height="28" rx="5" fill="#0f1318" stroke="#f97316" stroke-width="1.5"/>
+    <text x="205" y="179" fill="#f97316" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">Kafka /</text>
+    <text x="205" y="189" fill="#f97316" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">Queue</text>
+    <line x1="240" y1="178" x2="258" y2="178" stroke="#1e2530" stroke-width="1" marker-end="url(#da)"/>
+    <rect x="258" y="164" width="74" height="28" rx="5" fill="#0f1318" stroke="#fbbf24" stroke-width="1.5"/>
+    <text x="295" y="179" fill="#fbbf24" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">Aggregator</text>
+    <text x="295" y="189" fill="#6b7a8d" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">load-level</text>
+    <line x1="332" y1="178" x2="350" y2="178" stroke="#1e2530" stroke-width="1" marker-end="url(#da)"/>
+    <rect x="350" y="164" width="64" height="28" rx="5" fill="#0f1318" stroke="#f97316" stroke-width="1.2"/>
+    <text x="382" y="182" fill="#f97316" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">Backend(s)</text>
+    <circle r="3.5" fill="#f97316" filter="url(#dg)">
+      <animateMotion dur="3s" repeatCount="indefinite" begin="0.6s" path="M10,178 L414,178"/>
+    </circle>
+  </svg>
+</div>
+
+
+  <div class="deploy-grid fade-in">
+    <div class="deploy-card">
+      <div class="deploy-num">Pattern 01</div>
+      <h3>Agent-only Deployment</h3>
+      <p>Simplest setup. One Collector per host, co-located with your application. Good for small environments or when getting started.</p>
+      <div class="deploy-flow">Application → OTel Collector (Agent) → O11y Backend</div>
+    </div>
+    <div class="deploy-card">
+      <div class="deploy-num">Pattern 02</div>
+      <h3>Agent and Gateway Deployment</h3>
+      <p>Agent collectors handle metadata enrichment efficiently at the edge. The gateway provides centralized control, security, and heavy processing. Best of both worlds.</p>
+      <div class="deploy-flow">Application → Collector (Agent) → Collector (Gateway) → O11y Backend</div>
+    </div>
+    <div class="deploy-card">
+      <div class="deploy-num">Pattern 03</div>
+      <h3>High Scale with Message Queue</h3>
+      <p>Provides load-leveling by decoupling agents from consumers — smooths out traffic spikes and allows downstream consumers to process data at a steady rate.</p>
+      <div class="deploy-flow">Application → Collector (Agent) → Message Queue → Collector (Aggregator) → O11y Backend(s)</div>
+    </div>
+  </div>
+
+  <!-- ── 10. BATCH DEEP DIVE ───────────────────────────────────────────── -->
+  <h2 class="fade-in"><span class="eyebrow">10 — Deep Dive</span>Understanding Available Batching Mechanisms</h2>
+
+  <p>The batch processor is like a ferry which has two rules for when it departs: it leaves when it's full, or it leaves after waiting a certain amount of time at the dock — even if it's not full. The batch processor operates on the exact same logic, controlled by <strong>3 key parameters</strong>.</p>
+
+  <div class="param-list fade-in">
+    <div class="param-item">
+      <div class="param-name">timeout</div>
+      <div class="param-body">
+        <div class="label">Controls maximum latency</div>
+        <div class="desc">The maximum latency introduced by the batch processor. A shorter time is good for near-realtime data needs. Default: <code>200ms</code>. This is the "time at the dock" — the ferry leaves even if not full after this duration.</div>
+      </div>
+    </div>
+    <div class="param-item">
+      <div class="param-name">send_batch_size</div>
+      <div class="param-body">
+        <div class="label">Controls target batch size</div>
+        <div class="desc">The number of items (spans, log records, or metric data points) that will trigger the batch to be sent, regardless of timeout. Default: <code>8192 items</code>. This is the "full ferry" trigger.</div>
+      </div>
+    </div>
+    <div class="param-item">
+      <div class="param-name">send_batch_max_size</div>
+      <div class="param-body">
+        <div class="label">The absolute safety ceiling</div>
+        <div class="desc"><code>send_batch_size</code> is a trigger, but it doesn't prevent a batch from growing larger. <code>send_batch_max_size</code> is the safety value — it ensures that no matter what, the batch sent to the next component is no larger than this value. If a batch exceeds it, it's split into smaller chunks. Essential when your backend has a strict request size limit. Default: <code>0</code> (disabled).</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="info-card fade-in">
+    <div class="card-label">How it all works together</div>
+    <h3>A batch is sent when either condition is met first</h3>
+    <p>Timeout is reached OR the number of items in the buffer reaches send_batch_size. If send_batch_max_size is set, it acts as a final check before sending — splitting oversized batches into chunks that respect the limit.</p>
+  </div>
+
+  <h3 class="fade-in">Batch Processor Best Practices</h3>
+
+  <div class="feat-list fade-in">
+    <div class="feat-item">
+      <div class="feat-icon">✅</div>
+      <div class="feat-body">
+        <div class="label">Place batch after sampling/filtering but before heavy processors</div>
+        <div class="desc">The batch processor should almost always be placed after sampling or filtering processors but before any processors that perform external lookups or heavy computations.</div>
+      </div>
+    </div>
+    <div class="feat-item">
+      <div class="feat-icon">✅</div>
+      <div class="feat-body">
+        <div class="label">Use a short timeout to avoid data taking too long to appear in backend</div>
+        <div class="desc">A timeout that's too high means your data will be stale in your backend before it even arrives. Tune based on your latency requirements.</div>
+      </div>
+    </div>
+    <div class="feat-item">
+      <div class="feat-icon">✅</div>
+      <div class="feat-body">
+        <div class="label">Set send_batch_max_size if exporter shows 4xx errors</div>
+        <div class="desc">If your exporter logs show 4xx errors indicating requests are too large, configure <code>send_batch_max_size</code>. All network-based exporters should have this set.</div>
+      </div>
+    </div>
+  </div>
+
+    <div class="next-reads fade-in">
+    <div class="next-reads-label">Continue Reading</div>
+    <div class="next-reads-grid" style="grid-template-columns:1fr 1fr;">
+      <a href="otel-logging.html" class="next-card" style="border-left:3px solid var(--indigo);">
+        <div class="next-tag" style="color:var(--indigo);">&#8592; Previous</div>
+        <div style="font-family:var(--mono-font);font-size:10px;color:var(--text-muted);margin-bottom:4px;">Advanced</div>
+        <h4>Logging in OpenTelemetry</h4>
+        <p>OpenTelemetry Logging Demystified: Flow and Context Enrichment.</p>
+      </a>
+      <!-- <a href="custom-collector.html" class="next-card" style="border-left:3px solid var(--accent);">
+        <div class="next-tag" style="color:var(--accent);">Next &#8594;</div>
+        <div style="font-family:var(--mono-font);font-size:10px;color:var(--text-muted);margin-bottom:4px;">Advanced</div>
+        <h4>Building a Custom OTel Collector</h4>
+        <p>OCB, manifest.yaml, starter pack components — lean production binary.</p>
+      </a> -->
+    </div>
+  </div>
+
+</article>
+
+<footer class="footer-dark">
+  <div class="footer-inner">
+    <a href="../index.html" class="footer-logo-dark"><span class="dot"></span>LearnObservability</a>
+    <span>© 2026 · Written by Thejasekhar Reddy.G</span>
+  </div>
+</footer>
+
+<script>
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach((e, i) => {
+    if (e.isIntersecting) {
+      setTimeout(() => e.target.classList.add('visible'), i * 80);
+      observer.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.12 });
+
+document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+</script>
+
+</body>
+</html>
