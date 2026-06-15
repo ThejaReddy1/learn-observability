@@ -42,6 +42,7 @@
     border-bottom: 1px solid var(--border);
     position: sticky; top: 0;
     background: rgba(10,12,16,0.95);
+    -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px); z-index: 100;
   }
 
@@ -1171,12 +1172,12 @@ docker compose logs otelcol -f --no-log-prefix</pre>
         <h4>Logging in OpenTelemetry</h4>
         <p>OpenTelemetry Logging Demystified: Flow and Context Enrichment.</p>
       </a>
-      <!-- <a href="custom-collector.html" class="next-card" style="border-left:3px solid var(--accent);">
+      <a href="collector-connectors.html" class="next-card" style="border-left:3px solid var(--accent);">
         <div class="next-tag" style="color:var(--accent);">Next &#8594;</div>
-        <div style="font-family:var(--mono-font);font-size:10px;color:var(--text-muted);margin-bottom:4px;">Advanced</div>
-        <h4>Building a Custom OTel Collector</h4>
-        <p>OCB, manifest.yaml, starter pack components — lean production binary.</p>
-      </a> -->
+        <div style="font-family:var(--mono-font);font-size:10px;color:var(--text-muted);margin-bottom:4px;">OTTL</div>
+        <h4>Collector Connectors</h4>
+        <p>Joining pipelines — SpanMetrics, Routing, Count, Exceptions and more.</p>
+      </a>
     </div>
   </div>
 
